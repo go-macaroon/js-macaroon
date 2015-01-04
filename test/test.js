@@ -676,3 +676,6 @@ function makeMacaroons(mspecs) {
 	}
 	return [strBitArray(mspecs[0].rootKey), primary, discharges];
 }
+
+describe("discharge", function() {
+})
