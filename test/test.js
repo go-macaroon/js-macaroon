@@ -1,6 +1,6 @@
 require("blanket");
 var assert = require("assert");
-var macaroon = require("/home/rog/src/macaroonjs/macaroon");
+var macaroon = require("/home/rog/src/js-macaroon/macaroon");
 var sjcl = require("sjcl");
 
 "use strict";
@@ -11,6 +11,9 @@ function strBitArray(s) {
 
 function never(){
 	return "condition is never true"
+}
+
+function alwaysOK(){
 }
 
 describe("macaroon", function() {
@@ -174,25 +177,6 @@ describe("import/export", function(){
 		var objs1 = macaroon.export(ms);
 		assert.deepEqual(objs1, objs);
 	})
-})
-
-describe("discharge", function(){
-	it("should discharge a macaroon with no caveats without calling getDischarge", function(){
-		var m = macaroon.newMacaroon(strBitArray("key"), "some id", "a location");
-		m.addFirstPartyCaveat("a caveat");
-		var getDischarge = function(){
-			throw "getDischarge called unexpectedly"
-		};
-		var result
-		var onOk = function(ms) {
-			result = ms
-		};
-		var onErr = function(err) {
-			throw "onErr called unexpectedly"
-		}
-		macaroon.discharge(m, getDischarge, onOk, onErr);
-		assert.deepEqual(result, [m]);
-	});
 })
 
 var recursiveThirdPartyCaveatMacaroons = [{
@@ -640,6 +624,65 @@ describe("verify external third party macaroons", function(){
 	})
 })
 
+describe("discharge", function(){
+	it("should discharge a macaroon with no caveats without calling getDischarge", function(){
+		var m = macaroon.newMacaroon(strBitArray("key"), "some id", "a location");
+		m.addFirstPartyCaveat("a caveat");
+		var getDischarge = function(){
+			throw "getDischarge called unexpectedly"
+		};
+		var result
+		var onOk = function(ms) {
+			result = ms
+		};
+		var onErr = function(err) {
+			throw "onErr called unexpectedly"
+		}
+		macaroon.discharge(m, getDischarge, onOk, onErr);
+		assert.deepEqual(result, [m]);
+	});
+	var queued = []
+	it("should discharge many discharges correctly", function(){
+		var rootKey = strBitArray("secret");
+		var m0 = macaroon.newMacaroon(rootKey, "id0", "location0")
+		var totalRequired = 40
+		var id = 1
+		var addCaveats = function(m) {
+			for(var i = 0; i < 2; i++){
+				if(totalRequired == 0){
+					break;
+				}
+				var cid = "id" + id;
+				m.addThirdPartyCaveat(strBitArray("root key " + cid), cid, "somewhere");
+				id++;
+				totalRequired--;
+			}
+		}
+		addCaveats(m0);
+		var getDischarge = function(loc, thirdPartyLoc, cond, onOK, onErr) {
+			assert.equal(loc, "location0");
+			var m = macaroon.newMacaroon(strBitArray("root key " + cond), cond, "");
+			addCaveats(m);
+			queued.push(function(){
+				onOK(m);
+			});
+		};
+		var discharges;
+		macaroon.discharge(m0, getDischarge, function(ms){
+			discharges = ms;
+		}, function(err) {
+			throw new Error("error callback called unexpectedly");
+		})
+		while(queued.length > 0){
+			var f = queued.shift();
+			f()
+		}
+		assert.notEqual(discharges, null);
+		assert.equal(discharges.length, 41);
+		discharges[0].verify(rootKey, alwaysOK, discharges.slice(1));
+	});
+})
+
 // makeMacaroon makes a set of macaroon from the given macaroon specifications.
 // Each macaroon specification is an object holding:
 // 	- rootKey: the root key (string)
@@ -676,6 +719,3 @@ function makeMacaroons(mspecs) {
 	}
 	return [strBitArray(mspecs[0].rootKey), primary, discharges];
 }
-
-describe("discharge", function() {
-})

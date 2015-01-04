@@ -232,7 +232,12 @@ Macaroon.prototype.signature = function() {
 // way, either by encrypting it with a key known to the third party
 // or by holding a reference to it stored in the third party's
 // storage.
+// The root key must be an sjcl bitArray; the other arguments
+// must be strings.
 Macaroon.prototype.addThirdPartyCaveat = function(rootKey, caveatId, loc) {
+	assertBitArray(rootKey, "caveat root key")
+	assertString(caveatId, "caveat id")
+	assertString(loc, "caveat location")
 	verificationId = encrypt(this._signature, rootKey)
 	this.addCaveat(caveatId, verificationId, loc)
 }
@@ -281,9 +286,20 @@ function decrypt(key, ciphertext) {
 	ciphertext = ciphertext.slice(nonceLen);
 	var text = nacl.secretbox.open(ciphertext, nonce, key);
 	if(text == false){
-		throw new Error("decryption failed");
+		throw new Error("decryption failed; " +
+			"ciphertext " + uint8hex(ciphertext) + "; " +
+			"nonce " + uint8hex(nonce) + "; " +
+			"key " + uint8hex(key));
 	}
 	return uint8ArrayToBitArray(text);
+}
+
+function uint8hex(a) {
+	return sjcl.codec.hex.fromBits(uint8ArrayToBitArray(a))
+}
+
+function hex(a) {
+	return sjcl.codec.hex.fromBits(a)
 }
 
 // bitArrayToUint8Array returns the sjcl bitArray a
