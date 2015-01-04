@@ -1,12 +1,21 @@
+require("blanket");
 var assert = require("assert");
 var macaroon = require("/home/rog/src/macaroonjs/macaroon");
 var sjcl = require("sjcl");
 
-'use strict';
+"use strict";
 
-describe('macaroon', function() {
-	it('should be created with the expected signature', function() {
-		var rootKey = sjcl.codec.utf8String.toBits("secret");
+function strBitArray(s) {
+	return sjcl.codec.utf8String.toBits(s);
+}
+
+function never(){
+	return "condition is never true"
+}
+
+describe("macaroon", function() {
+	it("should be created with the expected signature", function() {
+		var rootKey = strBitArray("secret");
 		var m = macaroon.newMacaroon(rootKey, "some id", "a location");
 		assert.equal(m.location(), "a location");
 		assert.equal(m.id(), "some id");
@@ -18,9 +27,11 @@ describe('macaroon', function() {
 			signature: "7354ae733c5688d63b60b9774b47098890e1f4de10e3071f9a279d82759b7edc",
 			caveats: [],
 		});
+
+		m.verify(rootKey, never, null)
 	});
 
-	it('should fail when newMacaroon called with bad args', function(){
+	it("should fail when newMacaroon called with bad args", function(){
 		assert.throws(function(){
 			macaroon.newMacaroon(null, "some id", "a location")
 		}, /invalid macaroon root key: null/)
@@ -31,7 +42,7 @@ describe('macaroon', function() {
 			macaroon.newMacaroon(5, "some id", "a location")
 		}, /invalid macaroon root key: 5/)
 
-		var key = sjcl.codec.utf8String.toBits('key')
+		var key = strBitArray('key')
 		assert.throws(function(){
 			macaroon.newMacaroon(key, null, "a location")
 		}, /invalid macaroon identifier: null/)
@@ -55,11 +66,17 @@ describe('macaroon', function() {
 		// TODO Should it be invalid to create a macaroon with an empty id or location?
 	})
 
-	it('should allow adding first party caveats', function() {
-		var rootKey = sjcl.codec.utf8String.toBits("secret");
+	it("should allow adding first party caveats", function() {
+		var rootKey = strBitArray("secret");
 		var m = macaroon.newMacaroon(rootKey, "some id", "a location");
-		m.addFirstPartyCaveat("a caveat");
-		m.addFirstPartyCaveat("another caveat");
+		var caveats = {
+			"a caveat": true,
+			"another caveat": true,
+		};
+		var tested = {};
+		for(var cav in caveats) {
+			m.addFirstPartyCaveat(cav);
+		}
 		assert.equal(sjcl.codec.hex.fromBits(m.signature()), "01a3a60cfccdbcc30e614d0bcb88928e8e791679fee8bbab2a42a7fad7c18c65");
 		var obj = macaroon.export(m);
 		assert.deepEqual(obj, {
@@ -72,19 +89,47 @@ describe('macaroon', function() {
 				cid: "another caveat",
 			}],
 		});
+		var check = function(cav){
+			tested[cav] = true;
+			if(!caveats[cav]){
+				return "condition not met"
+			}
+		}
+		m.verify(rootKey, check, null);
+		assert.deepEqual(tested, caveats)
+
+		m.addFirstPartyCaveat("not met")
+		assert.throws(function(){
+			m.verify(rootKey, check, null);
+		}, /condition not met/)
+
+		assert.equal(tested["not met"], true)
 	});
 
-	it('should allow binding to another macaroon', function() {
-		var rootKey = sjcl.codec.utf8String.toBits("secret");
+	it("should allow adding a third party caveat", function() {
+		var rootKey = strBitArray("secret");
 		var m = macaroon.newMacaroon(rootKey, "some id", "a location");
-		var otherSig = sjcl.codec.utf8String.toBits("another sig");
+
+		var dischargeRootKey = strBitArray("shared root key")
+		var thirdPartyCaveatId = "3rd party caveat"
+		m.addThirdPartyCaveat(dischargeRootKey, thirdPartyCaveatId, "remote.com")
+
+		var dm = macaroon.newMacaroon(dischargeRootKey, thirdPartyCaveatId, "remote location")
+		dm.bind(m.signature())
+		m.verify(rootKey, never, [dm])
+	})
+
+	it("should allow binding to another macaroon", function() {
+		var rootKey = strBitArray("secret");
+		var m = macaroon.newMacaroon(rootKey, "some id", "a location");
+		var otherSig = strBitArray("another sig");
 		m.bind(otherSig);
 		assert.equal(sjcl.codec.hex.fromBits(m.signature()), "8d7db21cdd0002115ba1e999f6b9417ff3050df2fd0ab4c4c1bce7c1152b9f5e");
 	});
 })
 
-describe('import/export', function(){
-	it('should import from a single object', function(){
+describe("import/export", function(){
+	it("should import from a single object", function(){
 		var obj = 	{
 			location: "a location",
 			identifier: "id 1",
@@ -109,7 +154,7 @@ describe('import/export', function(){
 		assert.deepEqual(obj1, obj);
 	})
 
-	it('should import from an array', function(){
+	it("should import from an array", function(){
 		var objs = [{
 			location: "a location",
 			identifier: "id 0",
@@ -127,7 +172,507 @@ describe('import/export', function(){
 		assert.equal(ms[1].id(), "id 1")
 		
 		var objs1 = macaroon.export(ms);
-		console.log("got re-exported " + JSON.stringify(objs1))
 		assert.deepEqual(objs1, objs);
 	})
 })
+
+describe("discharge", function(){
+	it("should discharge a macaroon with no caveats without calling getDischarge", function(){
+		var m = macaroon.newMacaroon(strBitArray("key"), "some id", "a location");
+		m.addFirstPartyCaveat("a caveat");
+		var getDischarge = function(){
+			throw "getDischarge called unexpectedly"
+		};
+		var result
+		var onOk = function(ms) {
+			result = ms
+		};
+		var onErr = function(err) {
+			throw "onErr called unexpectedly"
+		}
+		macaroon.discharge(m, getDischarge, onOk, onErr);
+		assert.deepEqual(result, [m]);
+	});
+})
+
+var recursiveThirdPartyCaveatMacaroons = [{
+	rootKey: "root-key",
+	id:      "root-id",
+	caveats: [{
+		condition: "wonderful",
+	}, {
+		condition: "bob-is-great",
+		location:  "bob",
+		rootKey:   "bob-caveat-root-key",
+	}, {
+		condition: "charlie-is-great",
+		location:  "charlie",
+		rootKey:   "charlie-caveat-root-key",
+	}],
+}, {
+	location: "bob",
+	rootKey:  "bob-caveat-root-key",
+	id:       "bob-is-great",
+	caveats: [{
+		condition: "splendid",
+	}, {
+		condition: "barbara-is-great",
+		location:  "barbara",
+		rootKey:   "barbara-caveat-root-key",
+	}],
+}, {
+	location: "charlie",
+	rootKey:  "charlie-caveat-root-key",
+	id:       "charlie-is-great",
+	caveats: [{
+		condition: "splendid",
+	}, {
+		condition: "celine-is-great",
+		location:  "celine",
+		rootKey:   "celine-caveat-root-key",
+	}],
+}, {
+	location: "barbara",
+	rootKey:  "barbara-caveat-root-key",
+	id:       "barbara-is-great",
+	caveats: [{
+		condition: "spiffing",
+	}, {
+		condition: "ben-is-great",
+		location:  "ben",
+		rootKey:   "ben-caveat-root-key",
+	}],
+}, {
+	location: "ben",
+	rootKey:  "ben-caveat-root-key",
+	id:       "ben-is-great",
+}, {
+	location: "celine",
+	rootKey:  "celine-caveat-root-key",
+	id:       "celine-is-great",
+	caveats: [{
+		condition: "high-fiving",
+	}],
+}]
+
+var verifyTests = [{
+	about: "single third party caveat without discharge",
+	macaroons: [{
+		rootKey: "root-key",
+		id:      "root-id",
+		caveats: [{
+			condition: "wonderful",
+		}, {
+			condition: "bob-is-great",
+			location:  "bob",
+			rootKey:   "bob-caveat-root-key",
+		}],
+	}],
+	conditions: [{
+		conditions: {
+			"wonderful": true,
+		},
+		expectErr: /cannot find discharge macaroon for caveat "bob-is-great"/,
+	}],
+}, {
+	about: "single third party caveat with discharge",
+	macaroons: [{
+		rootKey: "root-key",
+		id:      "root-id",
+		caveats: [{
+			condition: "wonderful",
+		}, {
+			condition: "bob-is-great",
+			location:  "bob",
+			rootKey:   "bob-caveat-root-key",
+		}],
+	}, {
+		location: "bob",
+		rootKey:  "bob-caveat-root-key",
+		id:       "bob-is-great",
+	}],
+	conditions: [{
+		conditions: {
+			"wonderful": true,
+		},
+	}, {
+		conditions: {
+			"wonderful": false,
+		},
+		expectErr: /condition "wonderful" not met/,
+	}],
+}, {
+	about: "single third party caveat with discharge with mismatching root key",
+	macaroons: [{
+		rootKey: "root-key",
+		id:      "root-id",
+		caveats: [{
+			condition: "wonderful",
+		}, {
+			condition: "bob-is-great",
+			location:  "bob",
+			rootKey:   "bob-caveat-root-key",
+		}],
+	}, {
+		location: "bob",
+		rootKey:  "bob-caveat-root-key-wrong",
+		id:       "bob-is-great",
+	}],
+	conditions: [{
+		conditions: {
+			"wonderful": true,
+		},
+		expectErr: /signature mismatch after caveat verification/,
+	}],
+}, {
+	about: "single third party caveat with two discharges",
+	macaroons: [{
+		rootKey: "root-key",
+		id:      "root-id",
+		caveats: [{
+			condition: "wonderful",
+		}, {
+			condition: "bob-is-great",
+			location:  "bob",
+			rootKey:   "bob-caveat-root-key",
+		}],
+	}, {
+		location: "bob",
+		rootKey:  "bob-caveat-root-key",
+		id:       "bob-is-great",
+		caveats: [{
+			condition: "splendid",
+		}],
+	}, {
+		location: "bob",
+		rootKey:  "bob-caveat-root-key",
+		id:       "bob-is-great",
+		caveats: [{
+			condition: "top of the world",
+		}],
+	}],
+	conditions: [{
+		conditions: {
+			"wonderful": true,
+		},
+		expectErr: /condition "splendid" not met/,
+	}, {
+		conditions: {
+			"wonderful":        true,
+			"splendid":         true,
+			"top of the world": true,
+		},
+		expectErr: /discharge macaroon "bob-is-great" was not used/,
+	}, {
+		conditions: {
+			"wonderful":        true,
+			"splendid":         false,
+			"top of the world": true,
+		},
+		expectErr: /condition "splendid" not met/,
+	}, {
+		conditions: {
+			"wonderful":        true,
+			"splendid":         true,
+			"top of the world": false,
+		},
+		expectErr: /discharge macaroon "bob-is-great" was not used/,
+	}],
+}, {
+	about: "one discharge used for two macaroons",
+	macaroons: [{
+		rootKey: "root-key",
+		id:      "root-id",
+		caveats: [{
+			condition: "somewhere else",
+			location:  "bob",
+			rootKey:   "bob-caveat-root-key",
+		}, {
+			condition: "bob-is-great",
+			location:  "charlie",
+			rootKey:   "bob-caveat-root-key",
+		}],
+	}, {
+		location: "bob",
+		rootKey:  "bob-caveat-root-key",
+		id:       "somewhere else",
+		caveats: [{
+			condition: "bob-is-great",
+			location:  "charlie",
+			rootKey:   "bob-caveat-root-key",
+		}],
+	}, {
+		location: "bob",
+		rootKey:  "bob-caveat-root-key",
+		id:       "bob-is-great",
+	}],
+	conditions: [{
+		expectErr: /discharge macaroon "bob-is-great" was used more than once/,
+	}],
+}, {
+	about: "recursive third party caveat",
+	macaroons: [{
+		rootKey: "root-key",
+		id:      "root-id",
+		caveats: [{
+			condition: "bob-is-great",
+			location:  "bob",
+			rootKey:   "bob-caveat-root-key",
+		}],
+	}, {
+		location: "bob",
+		rootKey:  "bob-caveat-root-key",
+		id:       "bob-is-great",
+		caveats: [{
+			condition: "bob-is-great",
+			location:  "charlie",
+			rootKey:   "bob-caveat-root-key",
+		}],
+	}],
+	conditions: [{
+		expectErr: /discharge macaroon "bob-is-great" was used more than once/,
+	}],
+}, {
+	about: "two third party caveats",
+	macaroons: [{
+		rootKey: "root-key",
+		id:      "root-id",
+		caveats: [{
+			condition: "wonderful",
+		}, {
+			condition: "bob-is-great",
+			location:  "bob",
+			rootKey:   "bob-caveat-root-key",
+		}, {
+			condition: "charlie-is-great",
+			location:  "charlie",
+			rootKey:   "charlie-caveat-root-key",
+		}],
+	}, {
+		location: "bob",
+		rootKey:  "bob-caveat-root-key",
+		id:       "bob-is-great",
+		caveats: [{
+			condition: "splendid",
+		}],
+	}, {
+		location: "charlie",
+		rootKey:  "charlie-caveat-root-key",
+		id:       "charlie-is-great",
+		caveats: [{
+			condition: "top of the world",
+		}],
+	}],
+	conditions: [{
+		conditions: {
+			"wonderful":        true,
+			"splendid":         true,
+			"top of the world": true,
+		},
+	}, {
+		conditions: {
+			"wonderful":        true,
+			"splendid":         false,
+			"top of the world": true,
+		},
+		expectErr: /condition "splendid" not met/,
+	}, {
+		conditions: {
+			"wonderful":        true,
+			"splendid":         true,
+			"top of the world": false,
+		},
+		expectErr: /condition "top of the world" not met/,
+	}],
+}, {
+	about: "third party caveat with undischarged third party caveat",
+	macaroons: [{
+		rootKey: "root-key",
+		id:      "root-id",
+		caveats: [{
+			condition: "wonderful",
+		}, {
+			condition: "bob-is-great",
+			location:  "bob",
+			rootKey:   "bob-caveat-root-key",
+		}],
+	}, {
+		location: "bob",
+		rootKey:  "bob-caveat-root-key",
+		id:       "bob-is-great",
+		caveats: [{
+			condition: "splendid",
+		}, {
+			condition: "barbara-is-great",
+			location:  "barbara",
+			rootKey:   "barbara-caveat-root-key",
+		}],
+	}],
+	conditions: [{
+		conditions: {
+			"wonderful": true,
+			"splendid":  true,
+		},
+		expectErr: /cannot find discharge macaroon for caveat "barbara-is-great"/,
+	}],
+}, {
+	about:     "recursive third party caveats",
+	macaroons: recursiveThirdPartyCaveatMacaroons,
+	conditions: [{
+		conditions: {
+			"wonderful":   true,
+			"splendid":    true,
+			"high-fiving": true,
+			"spiffing":    true,
+		},
+	}, {
+		conditions: {
+			"wonderful":   true,
+			"splendid":    true,
+			"high-fiving": false,
+			"spiffing":    true,
+		},
+		expectErr: /condition "high-fiving" not met/,
+	}],
+}, {
+	about: "unused discharge",
+	macaroons: [{
+		rootKey: "root-key",
+		id:      "root-id",
+	}, {
+		rootKey: "other-key",
+		id:      "unused",
+	}],
+	conditions: [{
+		expectErr: /discharge macaroon "unused" was not used/,
+	}],
+}]
+
+describe("verify", function(){
+	for(var i in verifyTests){
+		var test = verifyTests[i];
+		it("should work with " + test.about, function(test){
+			return function(){
+				var keyMac = makeMacaroons(test.macaroons);
+				var rootKey = keyMac[0];
+				var primary = keyMac[1];
+				var discharges = keyMac[2];
+				for(var j in test.conditions){
+					var cond = test.conditions[j];
+					var check = function(cav) {
+						if(cond.conditions[cav]){
+							return null;
+						}
+						return 'condition "' + cav + '" not met';
+					}
+					if(cond.expectErr != null){
+						assert.throws(function(){
+								primary.verify(rootKey, check, discharges);
+							}, cond.expectErr, "expected error " + cond.expectErr);
+					} else {
+						primary.verify(rootKey, check, discharges);
+					}
+					// Cloned macaroon should have the same verify result.
+					primary = primary.clone();
+					if(cond.expectErr != null){
+						assert.throws(function(){
+								primary.verify(rootKey, check, discharges);
+							}, cond.expectErr, "expected error " + cond.expectErr);
+					} else {
+						primary.verify(rootKey, check, discharges);
+					}
+				}
+			}
+		}(test));
+	}
+})
+
+var externalRootKey = strBitArray("root-key")
+
+// Produced by running this code: http://play.golang.org/p/Cn7q91tuql
+var externalMacaroons = [
+	{
+		"caveats": [
+			{
+				"cid": "wonderful"
+			},
+			{
+				"cid": "bob-is-great",
+				"vid": "bUPvNGuK7RnYXbg/tm1+XpcKU1ARRHhbiafnjuLlFny9mIAuBluH751+oF6Djlz4zz0QBo9qFjPybBc=",
+				"cl": "bob"
+			},
+			{
+				"cid": "charlie-is-great",
+				"vid": "EFybSfXuedqK5dlsQbHr+v/bms8TjhthMvhHIS0enP5Y6xhWEpD48n8EvLdo8sVYrRhaj59aU0GMVPcksaQ8",
+				"cl": "charlie"
+			}
+		],
+		"location": "",
+		"identifier": "root-id",
+		"signature": "192441aa2bdac8bc2d7d44e81392ba3e7dac09da2c71415410277a409948996e"
+	},
+	{
+		"caveats": [
+			{
+				"cid": "splendid"
+			}
+		],
+		"location": "bob",
+		"identifier": "bob-is-great",
+		"signature": "9704dff5fa8f69c7289ca1d165cbdf80a28d50f5183d3552c36acdacec829de6"
+	},
+	{
+		"caveats": [
+			{
+				"cid": "top of the world"
+			}
+		],
+		"location": "charlie",
+		"identifier": "charlie-is-great",
+		"signature": "433e54cd94ca8cea0e1c2b28902f21c864b8fae816744d0a8e2a5fe893b171fc"
+	}
+]
+
+describe("verify external third party macaroons", function(){
+	it("should verify correctly", function(){
+		var ms = macaroon.import(externalMacaroons)
+		ms[0].verify(externalRootKey, function(){}, ms.slice(1))
+	})
+})
+
+// makeMacaroon makes a set of macaroon from the given macaroon specifications.
+// Each macaroon specification is an object holding:
+// 	- rootKey: the root key (string)
+//	- id: the macaroon id (string)
+//	- caveats: an array of caveats to add to the macaroon, (see below)
+//	- location: the location of the macaroon (string)
+//
+// Each caveat is specified with an object holding:
+// 	- rootKey: the caveat root key (string, optional)
+//	- location: the caveat location (string, optional)
+//	- condition: the caveat condition (string)
+function makeMacaroons(mspecs) {
+	var macaroons = []
+	for(var i in mspecs){
+		var mspec = mspecs[i];
+		if(mspec.location == null){
+			mspec.location = "";
+		}
+		var m = macaroon.newMacaroon(strBitArray(mspec.rootKey), mspec.id, mspec.location);
+		for(var j in mspec.caveats){
+			var cav = mspec.caveats[j];
+			if(cav.location != null){
+				m.addThirdPartyCaveat(strBitArray(cav.rootKey), cav.condition, cav.location);
+			} else {
+				m.addFirstPartyCaveat(cav.condition);
+			}
+		}
+		macaroons.push(m);
+	}
+	var primary = macaroons[0];
+	var discharges = macaroons.slice(1)
+	for(var i in discharges){
+		discharges[i].bind(primary.signature());
+	}
+	return [strBitArray(mspecs[0].rootKey), primary, discharges];
+}
