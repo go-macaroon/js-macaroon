@@ -1,9 +1,111 @@
+/*jslint node: true, continue: true, eqeq: true, forin: true, nomen: true, plusplus: true, todo: true, vars: true, white: true */
+
 var exports = module.exports = {};
 
 var sjcl = require("sjcl");
-var nacl = require("tweetnacl")
+var nacl = require("tweetnacl");
 
 'use strict';
+
+// assertString asserts that the given object
+// is a string, and fails with an exception including
+// "what" if it is not.
+function assertString(obj, what) {
+	if(typeof obj != "string"){
+		throw new Error("invalid " + what + ": " + obj);
+	}
+}
+
+// assertBitArray asserts that the given object
+// is a bit array, and fails with an exception including
+// "what" if it is not.
+function assertBitArray(obj, what) {
+	// TODO is a more specific test than this possible?
+	if(!(obj instanceof Array)){
+		throw new Error("invalid " + what + ": " + obj);
+	}
+}
+
+// bitArrayToUint8Array returns the sjcl bitArray a
+// converted to a Uint8Array as used by nacl.
+function bitArrayToUint8Array(a) {
+	// TODO I'm sure there's a more efficient way to do this.
+	return nacl.util.decodeBase64(sjcl.codec.base64.fromBits(a));
+}
+
+// uint8ArrayToBitArray returns the Uint8Array a
+// as used by nacl as an sjcl bitArray.
+function uint8ArrayToBitArray(a) {
+	return sjcl.codec.base64.toBits(nacl.util.encodeBase64(a));
+}
+
+// keyedHasher returns a keyed hash using the given
+// key, which must be an sjcl bitArray.
+var keyedHasher = function(key) {
+	return new sjcl.misc.hmac(key, sjcl.hash.sha256);
+};
+
+// keyedHash returns the keyed hash of the given
+// data. Both key and data must be sjcl bitArrays.
+// It returns the hash as an sjcl bitArray.
+var keyedHash = function(key, data) {
+	var h = keyedHasher(key);
+	h.update(data);
+	return h.digest();
+};
+
+var nonceLen = 24;
+
+// newNonce returns a new random nonce as a Uint8Array.
+var newNonce = function() {
+	return nacl.randomBytes(nonceLen);
+};
+
+// makeKey returns a key suitable for use as a nacl secretbox
+// key. It accepts a sjcl bitArray and returns a Uint8Array.
+function makeKey(key) {
+	if(key < nacl.secretbox.keyLength){
+		var a = new Uint8Array(nacl.secretbox.keyLength);
+		a.set(bitArrayToUint8Array(key));
+		return a;
+	}
+	var h = new sjcl.hash.sha256();
+	h.update(key);
+	return bitArrayToUint8Array(h.finalize());
+
+}
+
+// encrypt encrypts the given plaintext with the given key.
+// Both the key and the plaintext must be sjcl bitArrays.
+function encrypt(key, text) {
+	var nonce = newNonce();
+	key = makeKey(key);
+	text = bitArrayToUint8Array(text);
+	var data = nacl.secretbox(text, nonce, key);
+	var ciphertext = new Uint8Array(nonce.length + data.length);
+	ciphertext.set(nonce, 0);
+	ciphertext.set(data, nonce.length);
+	return uint8ArrayToBitArray(ciphertext);
+}
+
+// decrypt decrypts the given ciphertext (an sjcl bitArray
+// as returned by encrypt) with the given key (also
+// an sjcl bitArray)
+function decrypt(key, ciphertext) {
+	key = makeKey(key);
+	ciphertext = bitArrayToUint8Array(ciphertext);
+	var nonce = ciphertext.slice(0, nonceLen);
+	ciphertext = ciphertext.slice(nonceLen);
+	var text = nacl.secretbox.open(ciphertext, nonce, key);
+	if(text == false){
+		throw new Error("decryption failed");
+	}
+	return uint8ArrayToBitArray(text);
+}
+
+// Macaroon defines the macaroon object. It is not exported
+// as a constructor - newMacaroon should be used instead.
+function Macaroon() {}
 
 // newMacaroon returns a new macaroon with the given
 // root key, identifier and location.
@@ -14,39 +116,25 @@ exports.newMacaroon = function(rootKey, id, loc) {
 	m._caveats = [];
 	assertString(loc, "macaroon location");
 	assertString(id, "macaroon identifier");
-	assertBitArray(rootKey, "macaroon root key")
+	assertBitArray(rootKey, "macaroon root key");
 	m._location = loc;
 	m._identifier = id;
 	m._signature = keyedHash(rootKey, sjcl.codec.utf8String.toBits(id));
 	return m;
-}
+};
 
 function quote(s) {
 	return JSON.stringify(s);
-}
-
-// keyedHasher returns a keyed hash using the given
-// key, which must be an sjcl bitArray.
-var keyedHasher = function(key) {
-	return new sjcl.misc.hmac(key, sjcl.hash.sha256);
-}
-
-// keyedHash returns the keyed hash of the given
-// data. Both key and data must be sjcl bitArrays.
-// It returns the hash as an sjcl bitArray.
-var keyedHash = function(key, data) {
-	var h = keyedHasher(key);
-	h.update(data);
-	return h.digest();
 }
 
 // import converts an object as deserialised from
 // JSON to a macaroon. It also accepts an array of objects,
 // returning the resulting array of macaroons.
 exports.import = function(obj) {
+	var i;
 	if(obj.constructor == Array){
 		var result = [];
-		for(var i in obj){
+		for(i in obj){
 			result[i] = exports.import(obj[i]);
 		}
 		return result;
@@ -59,7 +147,7 @@ exports.import = function(obj) {
 	m._identifier = obj.identifier;
 
 	m._caveats = [];
-	for(var i in obj.caveats){
+	for(i in obj.caveats){
 		var jsonCav = obj.caveats[i];
 		var cav = {};
 		if(jsonCav.cl != null){
@@ -75,14 +163,15 @@ exports.import = function(obj) {
 		m._caveats[i] = cav;
 	}
 	return m;
-}
+};
 
 // export converts a macaroon or array of macaroons
 // to the exported object form, suitable for encoding as JSON.
 exports.export = function(m) {
+	var i;
 	if(m.constructor == Array){
-		var result = []
-		for(var i in m){
+		var result = [];
+		for(i in m){
 			result[i] = exports.export(m[i]);
 		}
 		return result;
@@ -91,21 +180,21 @@ exports.export = function(m) {
 		location: m._location,
 		identifier: m._identifier,
 		signature: sjcl.codec.hex.fromBits(m._signature),
-		caveats: []
+		caveats: [],
 	};
-	for(var i in m._caveats) {
+	for(i in m._caveats){
 		var cav = m._caveats[i];
 		var cavObj = {
-			cid: cav._identifier
+			cid: cav._identifier,
 		};
 		if(cav._location != null){
-			cavObj.vid = sjcl.codec.base64.fromBits(cav._vid)
-			cavObj.cl = cav._location
-		};
-		obj.caveats[i] = cavObj
+			cavObj.vid = sjcl.codec.base64.fromBits(cav._vid);
+			cavObj.cl = cav._location;
+		}
+		obj.caveats[i] = cavObj;
 	}
 	return obj;
-}
+};
 
 // discharge gathers discharge macaroons for all the third party caveats
 // in m (and any subsequent caveats required by those) calling getDischarge to
@@ -130,6 +219,7 @@ exports.discharge = function(m, getDischarge, onOk, onError) {
 	var pendingCount = 0;
 	var errorCalled = false;
 	var firstPartyLocation = m.location();
+	var dischargeCaveats;
 	var dischargedCallback = function(dm){
 		if(errorCalled){
 			return;
@@ -138,15 +228,16 @@ exports.discharge = function(m, getDischarge, onOk, onError) {
 		discharges.push(dm);
 		pendingCount--;
 		dischargeCaveats(dm);
-	}
+	};
 	var dischargedErrorCallback = function(err) {
 		if(!errorCalled){
 			onError(err);
 			errorCalled = true;
 		}
-	}
-	var dischargeCaveats = function(m){
-		for(var i in m._caveats){
+	};
+	dischargeCaveats = function(m){
+		var i;
+		for(i in m._caveats){
 			var cav = m._caveats[i];
 			if(cav._location == null){
 				continue;
@@ -164,18 +255,9 @@ exports.discharge = function(m, getDischarge, onOk, onError) {
 			onOk(discharges);
 			return;
 		}
-	}
+	};
 	dischargeCaveats(m);
-}
-
-function Macaroon() {}
-
-// bound returns a copy of the macaroon prepared for
-// being used to discharge a macaroon with the given signature,
-// which should be an sjcl bitArray.
-Macaroon.prototype.bind = function(sig) {
-	this._signature = bindForRequest(sig, this._signature)
-}
+};
 
 // bindForRequest binds the given macaroon
 // to the given signature of its parent macaroon.
@@ -189,42 +271,49 @@ function bindForRequest(rootSig, dischargeSig) {
 	return h.finalize();
 }
 
+// bound returns a copy of the macaroon prepared for
+// being used to discharge a macaroon with the given signature,
+// which should be an sjcl bitArray.
+Macaroon.prototype.bind = function(sig) {
+	this._signature = bindForRequest(sig, this._signature);
+};
+
 // caveats returns a list of all the caveats in the macaroon.
 Macaroon.prototype.getCaveats = function() {
-}
+};
 
 // signature returns the macaroon's signature as a buffer.
 Macaroon.prototype.signature = function() {
-	return this._signature
-}
+	return this._signature;
+};
 
 // clone returns a copy of the macaroon. Any caveats added
 // to the returned macaroon will not reflect the original.
 Macaroon.prototype.clone = function() {
-	m = new(Macaroon)
-	m._signature = this._signature
-	m._identifier = this._identifier
-	m._location = this._location
-	m._caveats = this._caveats.slice()
-	return m
-}
+	var m = new Macaroon();
+	m._signature = this._signature;
+	m._identifier = this._identifier;
+	m._location = this._location;
+	m._caveats = this._caveats.slice();
+	return m;
+};
 
 // location returns the location of the macaroon
 // as a string.
 Macaroon.prototype.location = function() {
-	return this._location
-}
+	return this._location;
+};
 
 // id returns the macaroon's identifier as a string.
 Macaroon.prototype.id = function() {
-	return this._identifier
-}
+	return this._identifier;
+};
 
 // signature returns the macaroon's signature as
 // sjcl bitArray.
 Macaroon.prototype.signature = function() {
-	return this._signature
-}
+	return this._signature;
+};
 
 // addThirdPartyCaveat adds a third-party caveat to the macaroon,
 // using the given shared root key, caveat id and location hint.
@@ -235,91 +324,18 @@ Macaroon.prototype.signature = function() {
 // The root key must be an sjcl bitArray; the other arguments
 // must be strings.
 Macaroon.prototype.addThirdPartyCaveat = function(rootKey, caveatId, loc) {
-	assertBitArray(rootKey, "caveat root key")
-	assertString(caveatId, "caveat id")
-	assertString(loc, "caveat location")
-	verificationId = encrypt(this._signature, rootKey)
-	this.addCaveat(caveatId, verificationId, loc)
-}
-
-var nonceLen = 24
-
-// newNonce returns a new random nonce as a Uint8Array.
-var newNonce = function() {
-	return nacl.randomBytes(nonceLen);
-}
-
-// encrypt encrypts the given plaintext with the given key.
-// Both the key and the plaintext must be sjcl bitArrays.
-function encrypt(key, text) {
-	var nonce = newNonce();
-	key = makeKey(key);
-	text = bitArrayToUint8Array(text);
-	var data = nacl.secretbox(text, nonce, key);
-	var ciphertext = new Uint8Array(nonce.length + data.length)
-	ciphertext.set(nonce, 0)
-	ciphertext.set(data, nonce.length)
-	return uint8ArrayToBitArray(ciphertext);
-}
-
-// makeKey returns a key suitable for use as a nacl secretbox
-// key. It accepts a sjcl bitArray and returns a Uint8Array.
-function makeKey(key) {
-	if(key < nacl.secretbox.keyLength){
-		var a = new Uint8Array(nacl.secretbox.keyLength)
-		a.set(bitArrayToUint8Array(key))
-		return a
-	}
-	var h = new sjcl.hash.sha256();
-	h.update(key);
-	return bitArrayToUint8Array(h.finalize());
-
-}
-
-// decrypt decrypts the given ciphertext (an sjcl bitArray
-// as returned by encrypt) with the given key (also
-// an sjcl bitArray)
-function decrypt(key, ciphertext) {
-	key = makeKey(key);
-	ciphertext = bitArrayToUint8Array(ciphertext);
-	var nonce = ciphertext.slice(0, nonceLen);
-	ciphertext = ciphertext.slice(nonceLen);
-	var text = nacl.secretbox.open(ciphertext, nonce, key);
-	if(text == false){
-		throw new Error("decryption failed; " +
-			"ciphertext " + uint8hex(ciphertext) + "; " +
-			"nonce " + uint8hex(nonce) + "; " +
-			"key " + uint8hex(key));
-	}
-	return uint8ArrayToBitArray(text);
-}
-
-function uint8hex(a) {
-	return sjcl.codec.hex.fromBits(uint8ArrayToBitArray(a))
-}
-
-function hex(a) {
-	return sjcl.codec.hex.fromBits(a)
-}
-
-// bitArrayToUint8Array returns the sjcl bitArray a
-// converted to a Uint8Array as used by nacl.
-function bitArrayToUint8Array(a) {
-	// TODO I'm sure there's a more efficient way to do this.
-	return nacl.util.decodeBase64(sjcl.codec.base64.fromBits(a));
-}
-
-// uint8ArrayToBitArray returns the Uint8Array a
-// as used by nacl as an sjcl bitArray.
-function uint8ArrayToBitArray(a) {
-	return sjcl.codec.base64.toBits(nacl.util.encodeBase64(a));
-}
+	assertBitArray(rootKey, "caveat root key");
+	assertString(caveatId, "caveat id");
+	assertString(loc, "caveat location");
+	var verificationId = encrypt(this._signature, rootKey);
+	this.addCaveat(caveatId, verificationId, loc);
+};
 
 // addFirstPartyCaveat adds a caveat that will be verified
 // by the target service. The caveat id must be a string.
 Macaroon.prototype.addFirstPartyCaveat = function(caveatId) {
 	this.addCaveat(caveatId, null, null);
-}
+};
 
 // addCaveat adds a first or third party caveat. The caveat id must be
 // a string. For a first party caveat, the verification id and the
@@ -343,7 +359,7 @@ Macaroon.prototype.addCaveat = function(caveatId, verificationId, loc) {
 	}
 	h.update(sjcl.codec.utf8String.toBits(caveatId));
 	this._signature = h.digest();
-}
+};
 
 // Verify verifies that the receiving macaroon is valid.
 // The root key must be the same that the macaroon was originally
@@ -356,11 +372,12 @@ Macaroon.prototype.addCaveat = function(caveatId, verificationId, loc) {
 // Verify throws an exception if the verification fails.
 Macaroon.prototype.verify = function(rootKey, check, discharges) {
 	var used = [];
-	for(var i in discharges){
+	var i;
+	for(i in discharges){
 		used[i] = 0;
 	}
 	this._verify(this._signature, rootKey, check, discharges, used);
-	for(var i in discharges){
+	for(i in discharges){
 		var dm = discharges[i];
 		if(used[i] == 0){
 			throw new Error("discharge macaroon " + quote(dm.id()) + " was not used");
@@ -370,16 +387,17 @@ Macaroon.prototype.verify = function(rootKey, check, discharges) {
 			throw new Error("discharge macaroon " + quote(dm.id()) + " was used more than once");
 		}
 	}
-}
+};
 
 Macaroon.prototype._verify = function(rootSig, rootKey, check, discharges, used) {
 	var caveatSig = keyedHash(rootKey,  sjcl.codec.utf8String.toBits(this.id()));
-	for(var i in this._caveats){
+	var i, di;
+	for(i in this._caveats){
 		var cav = this._caveats[i];
 		if(cav._location != null){
-			cavKey = decrypt(caveatSig, cav._vid);
+			var cavKey = decrypt(caveatSig, cav._vid);
 			var found = false;
-			for(var di in discharges){
+			for(di in discharges){
 				var dm = discharges[di];
 				if(dm.id() != cav._identifier) {
 					continue;
@@ -414,23 +432,4 @@ Macaroon.prototype._verify = function(rootSig, rootKey, check, discharges, used)
 	if(!sjcl.bitArray.equal(boundSig, this._signature)){
 		throw new Error("signature mismatch after caveat verification");
 	}
-}
-
-// assertString asserts that the given object
-// is a string, and fails with an exception including
-// "what" if it is not.
-function assertString(obj, what) {
-	if(typeof(obj) != "string"){
-		throw new Error("invalid " + what + ": " + obj);
-	}
-}
-
-// assertBitArray asserts that the given object
-// is a bit array, and fails with an exception including
-// "what" if it is not.
-function assertBitArray(obj, what) {
-	// TODO is a more specific test than this possible?
-	if(!(obj instanceof Array)){
-		throw new Error("invalid " + what + ": " + obj)
-	}
-}
+};

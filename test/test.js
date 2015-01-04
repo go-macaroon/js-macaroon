@@ -1,3 +1,5 @@
+/*jslint node: true, continue: true, eqeq: true, forin: true, nomen: true, plusplus: true, todo: true, vars: true, white: true */
+
 require("blanket");
 var assert = require("assert");
 var macaroon = require("/home/rog/src/js-macaroon/macaroon");
@@ -10,10 +12,49 @@ function strBitArray(s) {
 }
 
 function never(){
-	return "condition is never true"
+	return "condition is never true";
 }
 
 function alwaysOK(){
+}
+
+// makeMacaroon makes a set of macaroon from the given macaroon specifications.
+// Each macaroon specification is an object holding:
+// 	- rootKey: the root key (string)
+//	- id: the macaroon id (string)
+//	- caveats: an array of caveats to add to the macaroon, (see below)
+//	- location: the location of the macaroon (string)
+//
+// Each caveat is specified with an object holding:
+// 	- rootKey: the caveat root key (string, optional)
+//	- location: the caveat location (string, optional)
+//	- condition: the caveat condition (string)
+function makeMacaroons(mspecs) {
+	var macaroons = [];
+	var i;
+	for(i in mspecs){
+		var j;
+		var mspec = mspecs[i];
+		if(mspec.location == null){
+			mspec.location = "";
+		}
+		var m = macaroon.newMacaroon(strBitArray(mspec.rootKey), mspec.id, mspec.location);
+		for(j in mspec.caveats){
+			var cav = mspec.caveats[j];
+			if(cav.location != null){
+				m.addThirdPartyCaveat(strBitArray(cav.rootKey), cav.condition, cav.location);
+			} else {
+				m.addFirstPartyCaveat(cav.condition);
+			}
+		}
+		macaroons.push(m);
+	}
+	var primary = macaroons[0];
+	var discharges = macaroons.slice(1);
+	for(i in discharges){
+		discharges[i].bind(primary.signature());
+	}
+	return [strBitArray(mspecs[0].rootKey), primary, discharges];
 }
 
 describe("macaroon", function() {
@@ -31,45 +72,46 @@ describe("macaroon", function() {
 			caveats: [],
 		});
 
-		m.verify(rootKey, never, null)
+		m.verify(rootKey, never, null);
 	});
 
 	it("should fail when newMacaroon called with bad args", function(){
 		assert.throws(function(){
-			macaroon.newMacaroon(null, "some id", "a location")
-		}, /invalid macaroon root key: null/)
+			macaroon.newMacaroon(null, "some id", "a location");
+		}, /invalid macaroon root key: null/);
 		assert.throws(function(){
-			macaroon.newMacaroon("hello", "some id", "a location")
-		}, /invalid macaroon root key: hello/)
+			macaroon.newMacaroon("hello", "some id", "a location");
+		}, /invalid macaroon root key: hello/);
 		assert.throws(function(){
-			macaroon.newMacaroon(5, "some id", "a location")
-		}, /invalid macaroon root key: 5/)
+			macaroon.newMacaroon(5, "some id", "a location");
+		}, /invalid macaroon root key: 5/);
 
-		var key = strBitArray('key')
+		var key = strBitArray('key');
 		assert.throws(function(){
-			macaroon.newMacaroon(key, null, "a location")
-		}, /invalid macaroon identifier: null/)
+			macaroon.newMacaroon(key, null, "a location");
+		}, /invalid macaroon identifier: null/);
 		assert.throws(function(){
-			macaroon.newMacaroon(key, 5, "a location")
-		}, /invalid macaroon identifier: 5/)
+			macaroon.newMacaroon(key, 5, "a location");
+		}, /invalid macaroon identifier: 5/);
 		assert.throws(function(){
-			macaroon.newMacaroon(key, key, "a location")
-		}, /invalid macaroon identifier: 26390080878848/)
+			macaroon.newMacaroon(key, key, "a location");
+		}, /invalid macaroon identifier: 26390080878848/);
 
 		assert.throws(function(){
-			macaroon.newMacaroon(key, "id", null)
-		}, /invalid macaroon location: null/)
+			macaroon.newMacaroon(key, "id", null);
+		}, /invalid macaroon location: null/);
 		assert.throws(function(){
-			macaroon.newMacaroon(key, "id", 5)
-		}, /invalid macaroon location: 5/)
+			macaroon.newMacaroon(key, "id", 5);
+		}, /invalid macaroon location: 5/);
 		assert.throws(function(){
-			macaroon.newMacaroon(key, "id", key)
-		}, /invalid macaroon location: 26390080878848/)
+			macaroon.newMacaroon(key, "id", key);
+		}, /invalid macaroon location: 26390080878848/);
 
 		// TODO Should it be invalid to create a macaroon with an empty id or location?
-	})
+	});
 
 	it("should allow adding first party caveats", function() {
+		var cav;
 		var rootKey = strBitArray("secret");
 		var m = macaroon.newMacaroon(rootKey, "some id", "a location");
 		var caveats = {
@@ -77,7 +119,7 @@ describe("macaroon", function() {
 			"another caveat": true,
 		};
 		var tested = {};
-		for(var cav in caveats) {
+		for(cav in caveats) {
 			m.addFirstPartyCaveat(cav);
 		}
 		assert.equal(sjcl.codec.hex.fromBits(m.signature()), "01a3a60cfccdbcc30e614d0bcb88928e8e791679fee8bbab2a42a7fad7c18c65");
@@ -95,31 +137,31 @@ describe("macaroon", function() {
 		var check = function(cav){
 			tested[cav] = true;
 			if(!caveats[cav]){
-				return "condition not met"
+				return "condition not met";
 			}
-		}
+		};
 		m.verify(rootKey, check, null);
-		assert.deepEqual(tested, caveats)
+		assert.deepEqual(tested, caveats);
 
-		m.addFirstPartyCaveat("not met")
+		m.addFirstPartyCaveat("not met");
 		assert.throws(function(){
 			m.verify(rootKey, check, null);
-		}, /condition not met/)
+		}, /condition not met/);
 
-		assert.equal(tested["not met"], true)
+		assert.equal(tested["not met"], true);
 	});
 
 	it("should allow adding a third party caveat", function() {
 		var rootKey = strBitArray("secret");
 		var m = macaroon.newMacaroon(rootKey, "some id", "a location");
 
-		var dischargeRootKey = strBitArray("shared root key")
-		var thirdPartyCaveatId = "3rd party caveat"
-		m.addThirdPartyCaveat(dischargeRootKey, thirdPartyCaveatId, "remote.com")
+		var dischargeRootKey = strBitArray("shared root key");
+		var thirdPartyCaveatId = "3rd party caveat";
+		m.addThirdPartyCaveat(dischargeRootKey, thirdPartyCaveatId, "remote.com");
 
-		var dm = macaroon.newMacaroon(dischargeRootKey, thirdPartyCaveatId, "remote location")
-		dm.bind(m.signature())
-		m.verify(rootKey, never, [dm])
+		var dm = macaroon.newMacaroon(dischargeRootKey, thirdPartyCaveatId, "remote location");
+		dm.bind(m.signature());
+		m.verify(rootKey, never, [dm]);
 	})
 
 	it("should allow binding to another macaroon", function() {
@@ -129,7 +171,7 @@ describe("macaroon", function() {
 		m.bind(otherSig);
 		assert.equal(sjcl.codec.hex.fromBits(m.signature()), "8d7db21cdd0002115ba1e999f6b9417ff3050df2fd0ab4c4c1bce7c1152b9f5e");
 	});
-})
+});
 
 describe("import/export", function(){
 	it("should import from a single object", function(){
@@ -146,9 +188,9 @@ describe("import/export", function(){
 					"cl": "3rd loc"
 				},
 			],
-		}
+		};
 
-		var m = macaroon.import(obj)
+		var m = macaroon.import(obj);
 		assert.equal(m.location(), "a location");
 		assert.equal(m.id(), "id 1");
 		assert.equal(sjcl.codec.hex.fromBits(m.signature()), "e0831c334c600631bf7b860ca20c9930f584b077b8eac1f1e99c6a45d11a3d20");
@@ -169,15 +211,15 @@ describe("import/export", function(){
 			signature: "99b1c2dede0ce1cba0b632e3996e9924bdaee6287151600468644b92caf3761b",
 			caveats: [],
 		}];
-		var ms = macaroon.import(objs)
-		assert.equal(ms.length, 2)
-		assert.equal(ms[0].id(), "id 0")
-		assert.equal(ms[1].id(), "id 1")
+		var ms = macaroon.import(objs);
+		assert.equal(ms.length, 2);
+		assert.equal(ms[0].id(), "id 0");
+		assert.equal(ms[1].id(), "id 1");
 		
 		var objs1 = macaroon.export(ms);
 		assert.deepEqual(objs1, objs);
-	})
-})
+	});
+});
 
 var recursiveThirdPartyCaveatMacaroons = [{
 	rootKey: "root-key",
@@ -237,7 +279,7 @@ var recursiveThirdPartyCaveatMacaroons = [{
 	caveats: [{
 		condition: "high-fiving",
 	}],
-}]
+}];
 
 var verifyTests = [{
 	about: "single third party caveat without discharge",
@@ -530,25 +572,27 @@ var verifyTests = [{
 	conditions: [{
 		expectErr: /discharge macaroon "unused" was not used/,
 	}],
-}]
+}];
 
 describe("verify", function(){
-	for(var i in verifyTests){
+	var i;
+	for(i in verifyTests){
 		var test = verifyTests[i];
 		it("should work with " + test.about, function(test){
 			return function(){
+				var j;
 				var keyMac = makeMacaroons(test.macaroons);
 				var rootKey = keyMac[0];
 				var primary = keyMac[1];
 				var discharges = keyMac[2];
-				for(var j in test.conditions){
+				for(j in test.conditions){
 					var cond = test.conditions[j];
 					var check = function(cav) {
 						if(cond.conditions[cav]){
 							return null;
 						}
 						return 'condition "' + cav + '" not met';
-					}
+					};
 					if(cond.expectErr != null){
 						assert.throws(function(){
 								primary.verify(rootKey, check, discharges);
@@ -566,12 +610,12 @@ describe("verify", function(){
 						primary.verify(rootKey, check, discharges);
 					}
 				}
-			}
+			};
 		}(test));
 	}
-})
+});
 
-var externalRootKey = strBitArray("root-key")
+var externalRootKey = strBitArray("root-key");
 
 // Produced by running this code: http://play.golang.org/p/Cn7q91tuql
 var externalMacaroons = [
@@ -615,40 +659,41 @@ var externalMacaroons = [
 		"identifier": "charlie-is-great",
 		"signature": "433e54cd94ca8cea0e1c2b28902f21c864b8fae816744d0a8e2a5fe893b171fc"
 	}
-]
+];
 
 describe("verify external third party macaroons", function(){
 	it("should verify correctly", function(){
-		var ms = macaroon.import(externalMacaroons)
-		ms[0].verify(externalRootKey, function(){}, ms.slice(1))
-	})
-})
+		var ms = macaroon.import(externalMacaroons);
+		ms[0].verify(externalRootKey, function(){}, ms.slice(1));
+	});
+});
 
 describe("discharge", function(){
 	it("should discharge a macaroon with no caveats without calling getDischarge", function(){
 		var m = macaroon.newMacaroon(strBitArray("key"), "some id", "a location");
 		m.addFirstPartyCaveat("a caveat");
 		var getDischarge = function(){
-			throw "getDischarge called unexpectedly"
+			throw "getDischarge called unexpectedly";
 		};
-		var result
+		var result;
 		var onOk = function(ms) {
-			result = ms
+			result = ms;
 		};
 		var onErr = function(err) {
-			throw "onErr called unexpectedly"
-		}
+			throw "onErr called unexpectedly";
+		};
 		macaroon.discharge(m, getDischarge, onOk, onErr);
 		assert.deepEqual(result, [m]);
 	});
-	var queued = []
+	var queued = [];
 	it("should discharge many discharges correctly", function(){
 		var rootKey = strBitArray("secret");
-		var m0 = macaroon.newMacaroon(rootKey, "id0", "location0")
-		var totalRequired = 40
-		var id = 1
+		var m0 = macaroon.newMacaroon(rootKey, "id0", "location0");
+		var totalRequired = 40;
+		var id = 1;
 		var addCaveats = function(m) {
-			for(var i = 0; i < 2; i++){
+			var i;
+			for(i = 0; i < 2; i++){
 				if(totalRequired == 0){
 					break;
 				}
@@ -657,7 +702,7 @@ describe("discharge", function(){
 				id++;
 				totalRequired--;
 			}
-		}
+		};
 		addCaveats(m0);
 		var getDischarge = function(loc, thirdPartyLoc, cond, onOK, onErr) {
 			assert.equal(loc, "location0");
@@ -671,51 +716,14 @@ describe("discharge", function(){
 		macaroon.discharge(m0, getDischarge, function(ms){
 			discharges = ms;
 		}, function(err) {
-			throw new Error("error callback called unexpectedly");
-		})
+			throw new Error("error callback called unexpectedly: " + err);
+		});
 		while(queued.length > 0){
 			var f = queued.shift();
-			f()
+			f();
 		}
 		assert.notEqual(discharges, null);
 		assert.equal(discharges.length, 41);
 		discharges[0].verify(rootKey, alwaysOK, discharges.slice(1));
 	});
-})
-
-// makeMacaroon makes a set of macaroon from the given macaroon specifications.
-// Each macaroon specification is an object holding:
-// 	- rootKey: the root key (string)
-//	- id: the macaroon id (string)
-//	- caveats: an array of caveats to add to the macaroon, (see below)
-//	- location: the location of the macaroon (string)
-//
-// Each caveat is specified with an object holding:
-// 	- rootKey: the caveat root key (string, optional)
-//	- location: the caveat location (string, optional)
-//	- condition: the caveat condition (string)
-function makeMacaroons(mspecs) {
-	var macaroons = []
-	for(var i in mspecs){
-		var mspec = mspecs[i];
-		if(mspec.location == null){
-			mspec.location = "";
-		}
-		var m = macaroon.newMacaroon(strBitArray(mspec.rootKey), mspec.id, mspec.location);
-		for(var j in mspec.caveats){
-			var cav = mspec.caveats[j];
-			if(cav.location != null){
-				m.addThirdPartyCaveat(strBitArray(cav.rootKey), cav.condition, cav.location);
-			} else {
-				m.addFirstPartyCaveat(cav.condition);
-			}
-		}
-		macaroons.push(m);
-	}
-	var primary = macaroons[0];
-	var discharges = macaroons.slice(1)
-	for(var i in discharges){
-		discharges[i].bind(primary.signature());
-	}
-	return [strBitArray(mspecs[0].rootKey), primary, discharges];
-}
+});
