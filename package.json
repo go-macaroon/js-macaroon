@@ -1,0 +1,34 @@
+{
+	"name": "macaroon",
+	"author": "Roger Peppe \u003crogpeppe@gmail.com\u003e",
+	"bugs": {
+		"url": "http://github.com/go-macaroon/js-macaroon/issues"
+	},
+	"dependencies": {
+		"sjcl": "1.x.x",
+		"tweetnacl": "\u003e= 0.x.x"
+	},
+	"description": "macaroons: cookies with contextual caveats for decentralized authorization in the cloud",
+	"devDependencies": {
+		"mocha": "2.x.x"
+	},
+	"files": [
+		"macaroon.js",
+		"test"
+	],
+	"homepage": "http://github.com/go-macaroon/js-macaroon",
+	"keywords": [
+		"authorization",
+		"cookie"
+	],
+	"license": "BSD-3-Clause",
+	"main": "macaroon.js",
+	"repository": {
+		"type": "git",
+		"url": "http://github.com/go-macaroon/js-macaroon.git"
+	},
+	"scripts": {
+		"test": "node_modules/mocha/bin/mocha test/test.js"
+	},
+	"version": "0.0.1"
+}

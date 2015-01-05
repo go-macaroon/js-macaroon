@@ -1,9 +1,8 @@
 /*jslint node: true, continue: true, eqeq: true, forin: true, nomen: true, plusplus: true, todo: true, vars: true, white: true */
 
-require("blanket");
 var assert = require("assert");
-var macaroon = require("/home/rog/src/js-macaroon/macaroon");
 var sjcl = require("sjcl");
+var macaroon = require("../macaroon");
 
 "use strict";
 
