@@ -58,28 +58,27 @@ var nonceLen = 24;
 
 // newNonce returns a new random nonce as a Uint8Array.
 var newNonce = function() {
-	return nacl.randomBytes(nonceLen);
+	var nonce =  nacl.randomBytes(nonceLen);
+	// XXX provide a way to mock this out
+	for(var i = 0; i < nonce.length; i++) {
+		nonce[i] = 0;
+	}
+	return nonce;
 };
 
-// makeKey returns a key suitable for use as a nacl secretbox
-// key. It accepts a sjcl bitArray and returns a Uint8Array.
-function makeKey(key) {
-	if(key < nacl.secretbox.keyLength){
-		var a = new Uint8Array(nacl.secretbox.keyLength);
-		a.set(bitArrayToUint8Array(key));
-		return a;
-	}
-	var h = new sjcl.hash.sha256();
-	h.update(key);
-	return bitArrayToUint8Array(h.finalize());
+var keyGen = sjcl.codec.utf8String.toBits("macaroons-key-generator")
 
+// makeKey returns a fixed length key suitable for use as a nacl secretbox
+// key. It accepts and returns a sjcl bitArray.
+function makeKey(variableKey) {
+	return keyedHash(keyGen, variableKey)
 }
 
 // encrypt encrypts the given plaintext with the given key.
 // Both the key and the plaintext must be sjcl bitArrays.
 function encrypt(key, text) {
 	var nonce = newNonce();
-	key = makeKey(key);
+	key = bitArrayToUint8Array(key);
 	text = bitArrayToUint8Array(text);
 	var data = nacl.secretbox(text, nonce, key);
 	var ciphertext = new Uint8Array(nonce.length + data.length);
@@ -92,7 +91,7 @@ function encrypt(key, text) {
 // as returned by encrypt) with the given key (also
 // an sjcl bitArray)
 function decrypt(key, ciphertext) {
-	key = makeKey(key);
+	key = bitArrayToUint8Array(key);
 	ciphertext = bitArrayToUint8Array(ciphertext);
 	var nonce = ciphertext.slice(0, nonceLen);
 	ciphertext = ciphertext.slice(nonceLen);
@@ -117,6 +116,7 @@ exports.newMacaroon = function(rootKey, id, loc) {
 	assertString(loc, "macaroon location");
 	assertString(id, "macaroon identifier");
 	assertBitArray(rootKey, "macaroon root key");
+	rootKey = makeKey(rootKey)
 	m._location = loc;
 	m._identifier = id;
 	m._signature = keyedHash(rootKey, sjcl.codec.utf8String.toBits(id));
@@ -149,7 +149,11 @@ exports.import = function(obj) {
 	m._caveats = [];
 	for(i in obj.caveats){
 		var jsonCav = obj.caveats[i];
-		var cav = {};
+		var cav = {
+			_identifier: null,
+			_location: null,
+			_vid: null,
+		};
 		if(jsonCav.cl != null){
 			assertString(jsonCav.cl, "caveat location");
 			cav._location = jsonCav.cl;
@@ -187,7 +191,7 @@ exports.export = function(m) {
 		var cavObj = {
 			cid: cav._identifier,
 		};
-		if(cav._location != null){
+		if(cav._vid !== null){
 			cavObj.vid = sjcl.codec.base64.fromBits(cav._vid);
 			cavObj.cl = cav._location;
 		}
@@ -239,7 +243,7 @@ exports.discharge = function(m, getDischarge, onOk, onError) {
 		var i;
 		for(i in m._caveats){
 			var cav = m._caveats[i];
-			if(cav._location == null){
+			if(cav._vid == null){
 				continue;
 			}
 			getDischarge(
@@ -259,16 +263,16 @@ exports.discharge = function(m, getDischarge, onOk, onError) {
 	dischargeCaveats(m);
 };
 
+// 32 zero bytes.
+var zeroKey = sjcl.codec.hex.toBits("0000000000000000000000000000000000000000000000000000000000000000")
+
 // bindForRequest binds the given macaroon
 // to the given signature of its parent macaroon.
 function bindForRequest(rootSig, dischargeSig) {
 	if(sjcl.bitArray.equal(rootSig, dischargeSig)){
 		return rootSig;
 	}
-	var h = new sjcl.hash.sha256();
-	h.update(rootSig);
-	h.update(dischargeSig);
-	return h.finalize();
+	return keyedHash2(zeroKey, rootSig, dischargeSig)
 }
 
 // bound returns a copy of the macaroon prepared for
@@ -327,7 +331,7 @@ Macaroon.prototype.addThirdPartyCaveat = function(rootKey, caveatId, loc) {
 	assertBitArray(rootKey, "caveat root key");
 	assertString(caveatId, "caveat id");
 	assertString(loc, "caveat location");
-	var verificationId = encrypt(this._signature, rootKey);
+	var verificationId = encrypt(this._signature, makeKey(rootKey));
 	this.addCaveat(caveatId, verificationId, loc);
 };
 
@@ -337,6 +341,15 @@ Macaroon.prototype.addFirstPartyCaveat = function(caveatId) {
 	this.addCaveat(caveatId, null, null);
 };
 
+function keyedHash2(key, d1, d2) {
+	if(d1 === null){
+		return keyedHash(key, d2)
+	}
+	var h1 = keyedHash(key, d1)
+	var h2 = keyedHash(key, d2)
+	return keyedHash(key, sjcl.bitArray.concat(h1, h2))
+}
+
 // addCaveat adds a first or third party caveat. The caveat id must be
 // a string. For a first party caveat, the verification id and the
 // location must be null, otherwise the verification id must be
@@ -345,20 +358,17 @@ Macaroon.prototype.addCaveat = function(caveatId, verificationId, loc) {
 	assertString(caveatId, "macaroon caveat id");
 	var cav = {
 		_identifier: caveatId,
+		_vid: null,
+		_location: null,
 	};
-	if(loc != null){
+	if(verificationId !== null){
 		assertString(loc, "macaroon caveat location");
 		assertBitArray(verificationId, "macaroon caveat verification id");
 		cav._location = loc;
 		cav._vid = verificationId;
 	}
 	this._caveats.push(cav);
-	var h = keyedHasher(this._signature);
-	if(verificationId != null){
-		h.update(verificationId);
-	}
-	h.update(sjcl.codec.utf8String.toBits(caveatId));
-	this._signature = h.digest();
+	this._signature = keyedHash2(this._signature, verificationId, sjcl.codec.utf8String.toBits(caveatId))
 };
 
 // Verify verifies that the receiving macaroon is valid.
@@ -371,6 +381,7 @@ Macaroon.prototype.addCaveat = function(caveatId, verificationId, loc) {
 //
 // Verify throws an exception if the verification fails.
 Macaroon.prototype.verify = function(rootKey, check, discharges) {
+	rootKey = makeKey(rootKey)
 	var used = [];
 	var i;
 	for(i in discharges){
@@ -421,12 +432,7 @@ Macaroon.prototype._verify = function(rootSig, rootKey, check, discharges, used)
 				throw new Error(err);
 			}
 		}
-		var sigHasher = keyedHasher(caveatSig);
-		if(cav._vid != null){
-			sigHasher.update(cav._vid);
-		}
-		sigHasher.update(cav._identifier);
-		caveatSig = sigHasher.digest();
+		caveatSig = keyedHash2(caveatSig, cav._vid, cav._identifier)
 	}
 	var boundSig = bindForRequest(rootSig, caveatSig);
 	if(!sjcl.bitArray.equal(boundSig, this._signature)){

@@ -62,12 +62,12 @@ describe("macaroon", function() {
 		var m = macaroon.newMacaroon(rootKey, "some id", "a location");
 		assert.equal(m.location(), "a location");
 		assert.equal(m.id(), "some id");
-		assert.equal(sjcl.codec.hex.fromBits(m.signature()), "7354ae733c5688d63b60b9774b47098890e1f4de10e3071f9a279d82759b7edc");
+		assert.equal(sjcl.codec.hex.fromBits(m.signature()), "d916ce6f9b62dc4a080ce5d4a660956471f19b860da4242b0852727331c1033d");
 		var obj = macaroon.export(m);
 		assert.deepEqual(obj, {
 			location: "a location",
 			identifier: "some id",
-			signature: "7354ae733c5688d63b60b9774b47098890e1f4de10e3071f9a279d82759b7edc",
+			signature: "d916ce6f9b62dc4a080ce5d4a660956471f19b860da4242b0852727331c1033d",
 			caveats: [],
 		});
 
@@ -113,20 +113,20 @@ describe("macaroon", function() {
 		var cav;
 		var rootKey = strBitArray("secret");
 		var m = macaroon.newMacaroon(rootKey, "some id", "a location");
-		var caveats = {
-			"a caveat": true,
-			"another caveat": true,
-		};
+		var caveats = ["a caveat", "another caveat"]
+		var trueCaveats = {}
+		var checked = {}
 		var tested = {};
-		for(cav in caveats) {
-			m.addFirstPartyCaveat(cav);
+		for(i in caveats) {
+			m.addFirstPartyCaveat(caveats[i]);
+			trueCaveats[caveats[i]] = true
 		}
-		assert.equal(sjcl.codec.hex.fromBits(m.signature()), "01a3a60cfccdbcc30e614d0bcb88928e8e791679fee8bbab2a42a7fad7c18c65");
+		assert.equal(sjcl.codec.hex.fromBits(m.signature()), "c934e6af642ee55a4e4cfc56e07706cf1c6c94dc2192e5582943cddd88dc99d8");
 		var obj = macaroon.export(m);
 		assert.deepEqual(obj, {
 			location: "a location",
 			identifier: "some id",
-			signature: "01a3a60cfccdbcc30e614d0bcb88928e8e791679fee8bbab2a42a7fad7c18c65",
+			signature: "c934e6af642ee55a4e4cfc56e07706cf1c6c94dc2192e5582943cddd88dc99d8",
 			caveats: [{
 				cid: "a caveat",
 			}, {
@@ -135,12 +135,12 @@ describe("macaroon", function() {
 		});
 		var check = function(cav){
 			tested[cav] = true;
-			if(!caveats[cav]){
+			if(!trueCaveats[cav]){
 				return "condition not met";
 			}
 		};
 		m.verify(rootKey, check, null);
-		assert.deepEqual(tested, caveats);
+		assert.deepEqual(tested, trueCaveats);
 
 		m.addFirstPartyCaveat("not met");
 		assert.throws(function(){
@@ -168,7 +168,7 @@ describe("macaroon", function() {
 		var m = macaroon.newMacaroon(rootKey, "some id", "a location");
 		var otherSig = strBitArray("another sig");
 		m.bind(otherSig);
-		assert.equal(sjcl.codec.hex.fromBits(m.signature()), "8d7db21cdd0002115ba1e999f6b9417ff3050df2fd0ab4c4c1bce7c1152b9f5e");
+		assert.equal(sjcl.codec.hex.fromBits(m.signature()), "bba29be9ed9485a594f678adad69b7071c2f353308933355fc81cfad601b8277");
 	});
 });
 
@@ -625,18 +625,18 @@ var externalMacaroons = [
 			},
 			{
 				"cid": "bob-is-great",
-				"vid": "bUPvNGuK7RnYXbg/tm1+XpcKU1ARRHhbiafnjuLlFny9mIAuBluH751+oF6Djlz4zz0QBo9qFjPybBc=",
+				"vid": "YnpoATFtXlPux+ASP0iXsud5KqOAPy2zLxSjnGt0OY0L1XooSQagZeupd001spBjNh2IqG6i99OB9O2ERyNKMxpY5oMInKaC",
 				"cl": "bob"
 			},
 			{
 				"cid": "charlie-is-great",
-				"vid": "EFybSfXuedqK5dlsQbHr+v/bms8TjhthMvhHIS0enP5Y6xhWEpD48n8EvLdo8sVYrRhaj59aU0GMVPcksaQ8",
+				"vid": "pvwga+URCMCaYElz3pdB984Hy9efe7xyVeY0vdlil1+nVVsS4KVvOrG1eQvZdpN1oEEDydSuiLzHE3dJMpqZ+qXZ9RV4NJ7C",
 				"cl": "charlie"
 			}
 		],
 		"location": "",
 		"identifier": "root-id",
-		"signature": "192441aa2bdac8bc2d7d44e81392ba3e7dac09da2c71415410277a409948996e"
+		"signature": "79240bb490c6940658106811ad7033de5047ea0ef295d2d882da53b2e43bf3a1"
 	},
 	{
 		"caveats": [
@@ -646,7 +646,7 @@ var externalMacaroons = [
 		],
 		"location": "bob",
 		"identifier": "bob-is-great",
-		"signature": "9704dff5fa8f69c7289ca1d165cbdf80a28d50f5183d3552c36acdacec829de6"
+		"signature": "0389d56449d5e66289f7bfc8771757204051e9eb3ee99e522cf23484bdaf1629"
 	},
 	{
 		"caveats": [
@@ -656,7 +656,7 @@ var externalMacaroons = [
 		],
 		"location": "charlie",
 		"identifier": "charlie-is-great",
-		"signature": "433e54cd94ca8cea0e1c2b28902f21c864b8fae816744d0a8e2a5fe893b171fc"
+		"signature": "c48affa09c0fd0560e2a3176b639c09b4bdf957a379660f86f7bb35e14c8865e"
 	}
 ];
 
