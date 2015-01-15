@@ -34,13 +34,13 @@ function makeMacaroons(mspecs) {
 	for(i in mspecs){
 		var j;
 		var mspec = mspecs[i];
-		if(mspec.location == null){
+		if(mspec.location === undefined){
 			mspec.location = "";
 		}
 		var m = macaroon.newMacaroon(strBitArray(mspec.rootKey), mspec.id, mspec.location);
 		for(j in mspec.caveats){
 			var cav = mspec.caveats[j];
-			if(cav.location != null){
+			if(cav.location !== undefined){
 				m.addThirdPartyCaveat(strBitArray(cav.rootKey), cav.condition, cav.location);
 			} else {
 				m.addFirstPartyCaveat(cav.condition);
@@ -183,7 +183,7 @@ describe("import/export", function(){
 					"cid": "a caveat"
 				}, {
 					"cid": "3rd question",
-					"vid": "MMVAwhLcKvsgJS+SCTuhi9fMNYT9SjSePUX2q4z8y4/TpYfB82UCirA0ZICOdUb7ND/2",
+					"vid": "MMVAwhLcKvsgJS-SCTuhi9fMNYT9SjSePUX2q4z8y4_TpYfB82UCirA0ZICOdUb7ND_2",
 					"cl": "3rd loc"
 				},
 			],
@@ -592,7 +592,7 @@ describe("verify", function(){
 						}
 						return 'condition "' + cav + '" not met';
 					};
-					if(cond.expectErr != null){
+					if(cond.expectErr !== undefined){
 						assert.throws(function(){
 								primary.verify(rootKey, check, discharges);
 							}, cond.expectErr, "expected error " + cond.expectErr);
@@ -601,7 +601,7 @@ describe("verify", function(){
 					}
 					// Cloned macaroon should have the same verify result.
 					primary = primary.clone();
-					if(cond.expectErr != null){
+					if(cond.expectErr !== undefined){
 						assert.throws(function(){
 								primary.verify(rootKey, check, discharges);
 							}, cond.expectErr, "expected error " + cond.expectErr);
@@ -625,12 +625,12 @@ var externalMacaroons = [
 			},
 			{
 				"cid": "bob-is-great",
-				"vid": "YnpoATFtXlPux+ASP0iXsud5KqOAPy2zLxSjnGt0OY0L1XooSQagZeupd001spBjNh2IqG6i99OB9O2ERyNKMxpY5oMInKaC",
+				"vid": "YnpoATFtXlPux-ASP0iXsud5KqOAPy2zLxSjnGt0OY0L1XooSQagZeupd001spBjNh2IqG6i99OB9O2ERyNKMxpY5oMInKaC",
 				"cl": "bob"
 			},
 			{
 				"cid": "charlie-is-great",
-				"vid": "pvwga+URCMCaYElz3pdB984Hy9efe7xyVeY0vdlil1+nVVsS4KVvOrG1eQvZdpN1oEEDydSuiLzHE3dJMpqZ+qXZ9RV4NJ7C",
+				"vid": "pvwga-URCMCaYElz3pdB984Hy9efe7xyVeY0vdlil1-nVVsS4KVvOrG1eQvZdpN1oEEDydSuiLzHE3dJMpqZ-qXZ9RV4NJ7C",
 				"cl": "charlie"
 			}
 		],
@@ -693,7 +693,7 @@ describe("discharge", function(){
 		var addCaveats = function(m) {
 			var i;
 			for(i = 0; i < 2; i++){
-				if(totalRequired == 0){
+				if(totalRequired === 0){
 					break;
 				}
 				var cid = "id" + id;

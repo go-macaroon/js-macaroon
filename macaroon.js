@@ -11,7 +11,7 @@ var nacl = require("tweetnacl");
 // is a string, and fails with an exception including
 // "what" if it is not.
 function assertString(obj, what) {
-	if(typeof obj != "string"){
+	if(typeof obj !== "string"){
 		throw new Error("invalid " + what + ": " + obj);
 	}
 }
@@ -96,7 +96,7 @@ function decrypt(key, ciphertext) {
 	var nonce = ciphertext.slice(0, nonceLen);
 	ciphertext = ciphertext.slice(nonceLen);
 	var text = nacl.secretbox.open(ciphertext, nonce, key);
-	if(text == false){
+	if(text === false){
 		throw new Error("decryption failed");
 	}
 	return uint8ArrayToBitArray(text);
@@ -132,7 +132,7 @@ function quote(s) {
 // returning the resulting array of macaroons.
 exports.import = function(obj) {
 	var i;
-	if(obj.constructor == Array){
+	if(obj.constructor === Array){
 		var result = [];
 		for(i in obj){
 			result[i] = exports.import(obj[i]);
@@ -154,13 +154,14 @@ exports.import = function(obj) {
 			_location: null,
 			_vid: null,
 		};
-		if(jsonCav.cl != null){
+		if(jsonCav.cl !== undefined){
 			assertString(jsonCav.cl, "caveat location");
 			cav._location = jsonCav.cl;
 		}
-		if(jsonCav.vid != null) {
+		if(jsonCav.vid !== undefined) {
 			assertString(jsonCav.vid, "caveat verification id");
-			cav._vid = sjcl.codec.base64.toBits(jsonCav.vid, false);
+			// Use URL encoding.
+			cav._vid = sjcl.codec.base64.toBits(jsonCav.vid, true);
 		}
 		assertString(jsonCav.cid, "caveat id");
 		cav._identifier = jsonCav.cid;
@@ -173,7 +174,7 @@ exports.import = function(obj) {
 // to the exported object form, suitable for encoding as JSON.
 exports.export = function(m) {
 	var i;
-	if(m.constructor == Array){
+	if(m.constructor === Array){
 		var result = [];
 		for(i in m){
 			result[i] = exports.export(m[i]);
@@ -192,7 +193,8 @@ exports.export = function(m) {
 			cid: cav._identifier,
 		};
 		if(cav._vid !== null){
-			cavObj.vid = sjcl.codec.base64.fromBits(cav._vid);
+			// Use URL encoding and do not append "=" characters.
+			cavObj.vid = sjcl.codec.base64.fromBits(cav._vid, true, true);
 			cavObj.cl = cav._location;
 		}
 		obj.caveats[i] = cavObj;
@@ -243,7 +245,7 @@ exports.discharge = function(m, getDischarge, onOk, onError) {
 		var i;
 		for(i in m._caveats){
 			var cav = m._caveats[i];
-			if(cav._vid == null){
+			if(cav._vid === null){
 				continue;
 			}
 			getDischarge(
@@ -255,7 +257,7 @@ exports.discharge = function(m, getDischarge, onOk, onError) {
 			);
 			pendingCount++;
 		}
-		if(pendingCount == 0){
+		if(pendingCount === 0){
 			onOk(discharges);
 			return;
 		}
@@ -390,10 +392,10 @@ Macaroon.prototype.verify = function(rootKey, check, discharges) {
 	this._verify(this._signature, rootKey, check, discharges, used);
 	for(i in discharges){
 		var dm = discharges[i];
-		if(used[i] == 0){
+		if(used[i] === 0){
 			throw new Error("discharge macaroon " + quote(dm.id()) + " was not used");
 		}
-		if(used[i] != 1){
+		if(used[i] !== 1){
 			// Should be impossible because of check in verify1, but be defensive.
 			throw new Error("discharge macaroon " + quote(dm.id()) + " was used more than once");
 		}
@@ -405,12 +407,12 @@ Macaroon.prototype._verify = function(rootSig, rootKey, check, discharges, used)
 	var i, di;
 	for(i in this._caveats){
 		var cav = this._caveats[i];
-		if(cav._location != null){
+		if(cav._vid !== null){
 			var cavKey = decrypt(caveatSig, cav._vid);
 			var found = false;
 			for(di in discharges){
 				var dm = discharges[di];
-				if(dm.id() != cav._identifier) {
+				if(dm.id() !== cav._identifier) {
 					continue;
 				}
 				found = true;
