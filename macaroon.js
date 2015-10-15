@@ -20,7 +20,7 @@ function assertString(obj, what) {
 // is a Uint8array, and fails with an exception including
 // "what" if it is not.
 function assertUint8Array(obj, what) {
-		if(!(obj instanceof Uint8Array)){
+	if(!(obj instanceof Uint8Array)){
 		throw new Error("invalid " + what + ": " + obj);
 	}
 }
@@ -279,7 +279,7 @@ function bindForRequest(rootSig, dischargeSig) {
 
 // bound returns a copy of the macaroon prepared for
 // being used to discharge a macaroon with the given signature,
-// which should be Uint8Array.
+// which should be a Uint8Array.
 Macaroon.prototype.bind = function(sig) {
 	sig = uint8ArrayToBitArray(sig);
 	this._signature = bindForRequest(sig, this._signature);

@@ -14,10 +14,10 @@ function Uint8ArrayToHex(ua) {
 	if(!(ua instanceof Uint8Array)){
 		throw new Error("invalid Uint8Array:" + ua);
 	}
-  var hex = '';
+	var hex = '';
 	for ( var i = 0; i < ua.length; i++ )
 		hex += (ua[i] < 16 ? '0' : '') + ua[i].toString(16);
-  return hex;
+	return hex;
 }
 
 function never(){
