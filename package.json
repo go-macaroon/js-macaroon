@@ -1,0 +1,30 @@
+{
+  "name": "js-macaroon",
+  "version": "0.1.0",
+  "description": "Macaroons: cookies with contextual caveats for decentralized authorization in the cloud.",
+  "main": "js-macaroon.js",
+  "scripts": {
+    "test": "node test/test.js | tap-diff",
+    "lint": "eslint ."
+  },
+  "author": "Jeff Pihach (https://fromanegg.com)",
+  "contributors": [
+    "Roger Peppe <rogpeppe@gmail.com>"
+  ],
+  "keywords": [
+    "authorization",
+    "cookie",
+    "macaroon"
+  ],
+  "license": "BSD-3-Clause",
+  "devDependencies": {
+    "eslint": "^3.19.0",
+    "tap-diff": "^0.1.1",
+    "tape": "^4.6.3"
+  },
+  "dependencies": {
+    "sjcl": "^1.0.6",
+    "tweetnacl": "^0.14.5",
+    "tweetnacl-util": "^0.15.0"
+  }
+}
