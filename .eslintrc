@@ -1,0 +1,23 @@
+env:
+  browser: true
+  node: true
+  es6: true
+parserOptions:
+  ecmaVersion: 6
+rules:
+  eqeqeq: ["error"]
+  indent: [2, 2, {SwitchCase: 1, VariableDeclarator: 2}]
+  no-const-assign: 2
+  no-debugger: 2
+  no-mixed-spaces-and-tabs: ["error"]
+  no-multi-spaces: 2
+  no-shadow: 0
+  no-sparse-arrays: 2
+  no-trailing-spaces: ["error"]
+  no-undef: 2
+  no-underscore-dangle: 0
+  no-unused-vars: [2, {args: "none"}]
+  quotes: [2, "single"]
+  semi: [2, "always"]
+  space-before-blocks: 2
+  strict: [2, "global"]

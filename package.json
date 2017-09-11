@@ -1,34 +1,38 @@
 {
-	"name": "macaroon",
-	"author": "Roger Peppe \u003crogpeppe@gmail.com\u003e",
-	"bugs": {
-		"url": "http://github.com/go-macaroon/js-macaroon/issues"
-	},
-	"dependencies": {
-		"sjcl": "1.x.x",
-		"tweetnacl": "\u003e= 0.x.x"
-	},
-	"description": "macaroons: cookies with contextual caveats for decentralized authorization in the cloud",
-	"devDependencies": {
-		"mocha": "2.x.x"
-	},
-	"files": [
-		"macaroon.js",
-		"test"
-	],
-	"homepage": "http://github.com/go-macaroon/js-macaroon",
-	"keywords": [
-		"authorization",
-		"cookie"
-	],
-	"license": "BSD-3-Clause",
-	"main": "macaroon.js",
-	"repository": {
-		"type": "git",
-		"url": "http://github.com/go-macaroon/js-macaroon.git"
-	},
-	"scripts": {
-		"test": "node_modules/mocha/bin/mocha test/test.js"
-	},
-	"version": "1.0.0"
+  "author": "Roger Peppe (rogpeppe@gmail.com)",
+  "bugs": {
+    "url": "http://github.com/go-macaroon/js-macaroon/issues"
+  },
+  "contributors": [
+    "Jeff Pihach (https://fromanegg.com)"
+  ],
+  "dependencies": {
+    "sjcl": "^1.0.6",
+    "tweetnacl": "^0.14.5",
+    "tweetnacl-util": "^0.15.0"
+  },
+  "description": "Macaroons: cookies with contextual caveats for decentralized authorization in the cloud.",
+  "devDependencies": {
+    "eslint": "^3.19.0",
+    "tap-diff": "^0.1.1",
+    "tape": "^4.6.3"
+  },
+  "homepage": "http://github.com/go-macaroon/js-macaroon",
+  "keywords": [
+    "authorization",
+    "cookie",
+    "macaroon"
+  ],
+  "license": "BSD-3-Clause",
+  "main": "macaroon.js",
+  "name": "macaroon",
+  "repository": {
+    "type": "git",
+    "url": "http://github.com/go-macaroon/js-macaroon.git"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "test": "node test/test.js | tap-diff"
+  },
+  "version": "2.0.0"
 }
