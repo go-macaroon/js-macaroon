@@ -1,6 +1,6 @@
 'use strict';
 
-const m = require('../js-macaroon');
+const m = require('../macaroon');
 
 const nacl = require('tweetnacl');
 nacl.util = require('tweetnacl-util');

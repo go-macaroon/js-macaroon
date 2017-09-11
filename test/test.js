@@ -1,6 +1,6 @@
 'use strict';
 
-require('./js-macaroon');
+require('./macaroon');
 require('./import-export');
 require('./verify');
 require('./discharge');

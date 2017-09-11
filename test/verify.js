@@ -2,7 +2,7 @@
 
 const test = require('tape');
 
-const m = require('../js-macaroon');
+const m = require('../macaroon');
 const testUtils = require('./test-utils');
 
 const recursiveThirdPartyCaveatMacaroons = [{

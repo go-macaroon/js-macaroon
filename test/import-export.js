@@ -2,7 +2,7 @@
 
 const test = require('tape');
 
-const m = require('../js-macaroon');
+const m = require('../macaroon');
 const testUtils = require('./test-utils');
 
 test('should import from a single object', t => {
