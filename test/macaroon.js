@@ -7,7 +7,7 @@ const testUtils = require('./test-utils');
 
 test('should be created with the expected signature', t => {
   const rootKey = testUtils.strUint8Array('secret');
-  const macaroon = new m.Macaroon({
+  const macaroon = m.newMacaroon({
     rootKey,
     identifier: 'some id',
     location: 'a location'
@@ -18,12 +18,11 @@ test('should be created with the expected signature', t => {
     testUtils.Uint8ArrayToHex(macaroon.signature),
     'd916ce6f9b62dc4a080ce5d4a660956471f19b860da4242b0852727331c1033d');
 
-  const obj = macaroon.exportAsObject();
+  const obj = macaroon.exportAsJSONObject();
   t.deepEqual(obj, {
     location: 'a location',
     identifier: 'some id',
     signature: 'd916ce6f9b62dc4a080ce5d4a660956471f19b860da4242b0852727331c1033d',
-    caveats: [],
   });
 
   macaroon.verify(rootKey, testUtils.never);
@@ -32,11 +31,11 @@ test('should be created with the expected signature', t => {
 
 test('should fail when newMacaroon called with bad args', t => {
   t.throws(() => {
-    new m.Macaroon({
+    m.newMacaroon({
       rootKey: null, identifier: 'some id', location: 'a location'});
   }, 'Macaroon root key, is not of type Uint8Array.');
   t.throws(() => {
-    new m.Macaroon({
+    m.newMacaroon({
       rootKey: 'invalid', identifier: 'some id', location: 'a location'});
   }, 'Macaroon root key, is not of type Uint8Array.');
   t.throws(() => {
@@ -45,30 +44,30 @@ test('should fail when newMacaroon called with bad args', t => {
 
   var key = testUtils.strUint8Array('key');
   t.throws(() => {
-    new m.Macaroon(key, null, 'a location');
+    m.newMacaroon(key, null, 'a location');
   }, 'Macaroon identifier, is not of type string.');
   t.throws(() => {
-    new m.Macaroon(key, 5, 'a location');
+    m.newMacaroon(key, 5, 'a location');
   }, 'Macaroon identifier, is not of type string.');
   t.throws(() => {
-    new m.Macaroon(key, key, 'a location');
+    m.newMacaroon(key, key, 'a location');
   }, 'Macaroon identifier, is not of type string.');
 
   t.throws(() => {
-    new m.Macaroon(key, 'id', null);
+    m.newMacaroon(key, 'id', null);
   }, 'Macaroon location, is not of type string.');
   t.throws(() => {
-    new m.Macaroon(key, 'id', 5);
+    m.newMacaroon(key, 'id', 5);
   }, 'Macaroon location, is not of type string.');
   t.throws(() => {
-    new m.Macaroon(key, 'id', key);
+    m.newMacaroon(key, 'id', key);
   }, 'Macaroon location, is not of type string.');
   t.end();
 });
 
 test('should allow adding first party caveats', t => {
   const rootKey = testUtils.strUint8Array('secret');
-  const macaroon = new m.Macaroon({
+  const macaroon = m.newMacaroon({
     rootKey,
     identifier: 'some id',
     location: 'a location'
@@ -83,7 +82,7 @@ test('should allow adding first party caveats', t => {
   t.equal(
     testUtils.Uint8ArrayToHex(macaroon.signature),
     'c934e6af642ee55a4e4cfc56e07706cf1c6c94dc2192e5582943cddd88dc99d8');
-  const obj = macaroon.exportAsObject();
+  const obj = macaroon.exportAsJSONObject();
   t.deepEqual(obj, {
     location: 'a location',
     identifier: 'some id',
@@ -114,19 +113,22 @@ test('should allow adding first party caveats', t => {
 
 test('should allow adding a third party caveat', t => {
   const rootKey = testUtils.strUint8Array('secret');
-  const macaroon = new m.Macaroon({
-    rootKey, identifier: 'some id', location: 'a location'
+  const macaroon = m.newMacaroon({
+    rootKey,
+    identifier: 'some id',
+    location: 'a location',
   });
   const dischargeRootKey = testUtils.strUint8Array('shared root key');
   const thirdPartyCaveatId = '3rd party caveat';
   macaroon.addThirdPartyCaveat(
     dischargeRootKey, thirdPartyCaveatId, 'remote.com');
 
-  const dm = new m.Macaroon({
+  const dm = m.newMacaroon({
     rootKey: dischargeRootKey,
     identifier: thirdPartyCaveatId,
-    location: 'remote location'
+    location: 'remote location',
   });
+
   dm.bind(macaroon.signature);
   macaroon.verify(rootKey, testUtils.never, [dm]);
   t.end();
@@ -134,7 +136,7 @@ test('should allow adding a third party caveat', t => {
 
 test('should allow binding to another macaroon', t => {
   const rootKey = testUtils.strUint8Array('secret');
-  const macaroon = new m.Macaroon({
+  const macaroon = m.newMacaroon({
     rootKey, identifier: 'some id', location: 'a location'
   });
   const otherSig = testUtils.strUint8Array('another sig');

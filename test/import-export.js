@@ -21,14 +21,14 @@ test('should import from a single object', t => {
     ],
   };
 
-  const macaroon = m.generateMacaroons(obj);
+  const macaroon = m.importFromJSONObject(obj);
   t.equal(macaroon.location, 'a location');
   t.equal(macaroon.identifier, 'id 1');
   t.equal(
     testUtils.Uint8ArrayToHex(macaroon.signature),
     'e0831c334c600631bf7b860ca20c9930f584b077b8eac1f1e99c6a45d11a3d20');
   // Test that it round trips.
-  const obj1 = macaroon.exportAsObject();
+  const obj1 = macaroon.exportAsJSONObject();
   t.deepEqual(obj1, obj);
   t.end();
 });
@@ -38,20 +38,19 @@ test('should import from an array', t => {
     location: 'a location',
     identifier: 'id 0',
     signature: '4579ad730bf3f819a299aaf63f04f5e897d80690c4c5814a1ae026a45989de7d',
-    caveats: [],
   }, {
     location: 'a location',
     identifier: 'id 1',
     signature: '99b1c2dede0ce1cba0b632e3996e9924bdaee6287151600468644b92caf3761b',
-    caveats: [],
   }];
-  const macaroon = m.generateMacaroons(objs);
+  const macaroon = m.importFromJSONObject(objs);
+  
   t.equal(macaroon.length, 2);
   t.equal(macaroon[0].identifier, 'id 0');
   t.equal(macaroon[1].identifier, 'id 1');
 
   t.deepEqual([
-    macaroon[0].exportAsObject(),
-    macaroon[1].exportAsObject()], objs);
+    macaroon[0].exportAsJSONObject(),
+    macaroon[1].exportAsJSONObject()], objs);
   t.end();
 });

@@ -43,7 +43,7 @@ module.exports.makeMacaroons = mspecs => {
     if (mspec.location === undefined) {
       mspec.location = '';
     }
-    const macaroon = new m.Macaroon({
+    const macaroon = m.newMacaroon({
       rootKey: strUint8Array(mspec.rootKey),
       identifier: mspec.id,
       location: mspec.location

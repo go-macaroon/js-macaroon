@@ -7,25 +7,47 @@ nacl.util = require('tweetnacl-util');
 const NONCELEN = 24;
 
 /**
-  Check if supplied value is a string. Throws if not.
+  Check that supplied value is a string and return it. Throws an
+  error including the provided label if not.
   @param {String} val The value to assert as a string
-  @param {String} msg The value label.
+  @param {String} label The value label.
+  @return {String} The supplied value.
 */
-function requireString(val, msg) {
+function requireString(val, label) {
   if (typeof val !== 'string') {
-    throw new Error(`${msg}, is not of type string.`);;
+    throw new Error(`${label} has the wrong type; want string got ${typeof val}.`);
   }
+  return val;
 }
 
 /**
-  Check if supplied value is a Uint8Array. Throws if not.
-  @param {Uint8Array} val The value to assert as a Uint8Array
-  @param {Uint8Array} msg The value label.
+  Check that supplied value is a string or undefined or null. Throws
+  an error including the provided label if not. Always returns a string
+  (the empty string if undefined or null).
+
+  @param {(String | null)} val The value to assert as a string
+  @param {String} label The value label.
+  @return {String} The supplied value or an empty string.
 */
-function requireUint8Array(val, msg) {
-  if (!(val instanceof Uint8Array)) {
-    throw new Error(`${msg}, is not of type Uint8Array.`);
+function maybeString(val, label) {
+  if (val === undefined || val === null) {
+    return "";
   }
+  return requireString(val, label);
+}
+
+/**
+  Check that supplied value is a Uint8Array. Throws an error
+  including the provided label if not.
+  @param {Uint8Array} val The value to assert as a Uint8Array
+  @param {Uint8Array} label The value label.
+  @return {Uint8Array} The supplied value.
+*/
+function requireUint8Array(val, label) {
+  if (!(val instanceof Uint8Array)) {
+    throw new Error(`${label}, is not of type Uint8Array.`);
+  }
+  return val
 }
 
 /**
@@ -85,6 +107,7 @@ function keyedHash(key, data) {
   @param {bitArray} key
   @param {bitArray} d1
   @param {bitArray} d2
+  @return {bitArray} The keyed hash of d1 and d2 as a sjcl bitArray.
 */
 function keyedHash2(key, d1, d2) {
   if (d1 === null) {
@@ -141,6 +164,8 @@ function decrypt(key, ciphertext) {
   return uint8ArrayToBitArray(text);
 }
 
+const zeroKey = sjcl.codec.hex.toBits('0'.repeat(64));
+
 /**
   Bind a given macaroon to the given signature of its parent macaroon. If the
   keys already match then it will return the rootSig.
@@ -152,36 +177,25 @@ function bindForRequest(rootSig, dischargeSig) {
   if (sjcl.bitArray.equal(rootSig, dischargeSig)) {
     return rootSig;
   }
-  const zeroKey = sjcl.codec.hex.toBits('0000000000000000000000000000000000000000000000000000000000000000');
   return keyedHash2(zeroKey, rootSig, dischargeSig);
 }
 
 const Macaroon = class Macaroon {
   /**
-    Create a new Macaroon with the given root key, identifier, and location.
-    The root key must be an sjcl bitArray.
+    Create a new Macaroon with the given root key, identifier, location
+    and signature.
     @param {Object} The necessary values to generate a macaroon.
       It contains the following fields:
         identifier: {String}
         location:   {String}
-        rootKey:    {Uint8Array}
         caveats:    {Array}
-        signature:  {bitArray}
+        signature:  {bitarray}
   */
-  constructor({identifier, location, rootKey, caveats, signature} = {}) {
-    requireString(location, 'Macaroon location');
+  constructor({identifier, location, caveats, signature}) {
     this._location = location;
-    requireString(identifier, 'Macaroon identifier');
     this._identifier = identifier;
-    if (signature) {
-      requireUint8Array(signature, 'Signature');
-      this._signature = uint8ArrayToBitArray(signature);
-    } else {
-      requireUint8Array(rootKey, 'Macaroon root key');
-      this._signature = keyedHash(
-        makeKey(rootKey), sjcl.codec.utf8String.toBits(identifier));
-    }
-    this._caveats = caveats || [];
+    this._signature = signature;
+    this._caveats = caveats
   }
 
   get location() {
@@ -205,22 +219,19 @@ const Macaroon = class Macaroon {
       must be String.
   */
   addCaveat(caveatId, verificationId, location) {
-    requireString(caveatId, 'Macaroon caveat id');
     const caveat = {
-      _identifier: caveatId,
+      _identifier: requireString(caveatId, 'Macaroon caveat id'),
       _vid: null,
       _location: null,
     };
     if (verificationId !== null) {
-      requireString(location, 'Macaroon caveat location');
-      requireUint8Array(verificationId, 'Macaroon caveat verification id');
-      verificationId = uint8ArrayToBitArray(verificationId);
-      caveat._location = location;
-      caveat._vid = verificationId;
+      caveat._location = requireString(location, 'Macaroon caveat location');
+      caveat._vid = uint8ArrayToBitArray(
+        requireUint8Array(verificationId, 'Macaroon caveat verification id'));
     }
     this._caveats.push(caveat);
     this._signature = keyedHash2(
-      this._signature, verificationId, sjcl.codec.utf8String.toBits(caveatId));
+      this._signature, caveat._vid, sjcl.codec.utf8String.toBits(caveatId));
   }
 
   /**
@@ -233,12 +244,13 @@ const Macaroon = class Macaroon {
     @param {String} location
   */
   addThirdPartyCaveat(rootKey, caveatId, location) {
-    requireUint8Array(rootKey, 'Caveat root key');
-    requireString(caveatId, 'Caveat id');
-    requireString(location, 'Caveat location');
     const verificationId = bitArrayToUint8Array(
-      encrypt(this._signature, makeKey(rootKey)));
-    this.addCaveat(caveatId, verificationId, location);
+      encrypt(this._signature,
+        makeKey(requireUint8Array(rootKey, 'Caveat root key'))));
+    this.addCaveat(
+      requireString(caveatId, 'Caveat id'),
+      verificationId,
+      requireString(location, 'Caveat location'));
   }
 
   /**
@@ -251,6 +263,8 @@ const Macaroon = class Macaroon {
 
   /**
     Sets the macaroon signature to one bound to the given signature.
+    This must be called on discharge macaroons with the primary
+    macaroon's signature before sending the macaroons in a request.
     @param {Uint8Array} sig
   */
   bind(sig) {
@@ -265,23 +279,27 @@ const Macaroon = class Macaroon {
   */
   clone() {
     return new Macaroon({
-      signature: this.signature,
-      identifier: this.identifier,
-      location: this.location,
+      signature: this._signature,
+      identifier: this._identifier,
+      location: this._location,
       caveats: this._caveats.slice()
     });
   }
 
   /**
-    Returns a JSON compatibile object representation of this macaroon.
+    Returns a JSON compatible object representation of this macaroon.
     @return {Object} JSON compatible representation of this macaroon.
   */
-  exportAsObject() {
-    return {
-      location: this.location,
+  exportAsJSONObject() {
+    const obj = {
       identifier: this.identifier,
       signature: sjcl.codec.hex.fromBits(this._signature),
-      caveats: this._caveats.map(caveat => {
+    }
+    if (this.location){
+    	obj.location = this.location
+    }
+    if (this._caveats.length > 0){
+       obj.caveats = this._caveats.map(caveat => {
         const caveatObj = {
           cid: caveat._identifier
         };
@@ -292,7 +310,8 @@ const Macaroon = class Macaroon {
         }
         return caveatObj;
       })
-    };
+    }
+    return obj
   }
 
   /**
@@ -300,7 +319,8 @@ const Macaroon = class Macaroon {
     @param {bitArray} rootKey Must be the same that the macaroon was
       originally created with.
     @param {Function} check Called to verify each first-party caveat. It
-      should return an error if the condition is not me, or null if satisfied.
+      is passed the condition to check (a string) and should return an error if the condition
+      is not met, or null if satisfied.
     @param {Array} discharges
   */
   verify(rootKey, check, discharges = []) {
@@ -321,7 +341,6 @@ const Macaroon = class Macaroon {
       }
     });
   }
-
   _verify(rootSig, rootKey, check, discharges, used) {
     let caveatSig = keyedHash(
       rootKey, sjcl.codec.utf8String.toBits(this.identifier));
@@ -367,42 +386,63 @@ const Macaroon = class Macaroon {
 };
 
 /**
-  Generates macaroon instances based on the macarono data suppplied.
+  Returns macaroon instances based on the JSON-decoded object
+  in the argument. If this is passed an array, it will decode
+  all the macaroons in the array.
+  TODO accept version 2 format.
   @param {Object|Array} obj A deserialized JSON macaroon or an array of them.
   @return {Macaroon}
 */
-const generateMacaroons = function(obj) {
+const importFromJSONObject = function(obj) {
   if (Array.isArray(obj)) {
-    return obj.map(val => generateMacaroons(val));
+    return obj.map(val => importFromJSONObject(val));
   }
-
-  return new Macaroon({
-    signature: hexToUint8Array(obj.signature),
-    location: obj.location,
-    identifier: obj.identifier,
-    caveats: obj.caveats.map(caveat => {
+  let caveats = []
+  if (obj.caveats !== undefined){
+    caveats = obj.caveats.map(caveat => {
       const _caveat = {
-        _identifier: null,
+        _identifier: requireString(caveat.cid, 'Caveat id'),
         _location: null,
         _vid: null
       };
-      const cl = caveat.cl;
       if (caveat.cl !== undefined) {
-        requireString(cl, 'Caveat location.');
-        _caveat._location = cl;
+        _caveat._location = requireString(caveat.cl, 'Caveat location');
       }
-      const vid = caveat.vid;
-      if (vid !== undefined) {
-        requireString(vid, 'Caveat verification id.');
-        _caveat._vid = sjcl.codec.base64.toBits(vid, true);
+      if (caveat.vid !== undefined) {
+        _caveat._vid = sjcl.codec.base64.toBits(requireString(caveat.vid, 'Caveat verification id'), true);
       }
-      const cid = caveat.cid;
-      requireString(cid, 'Caveat id.');
-      _caveat._identifier = cid;
       return _caveat;
     })
+  }
+  return new Macaroon({
+    signature: uint8ArrayToBitArray(hexToUint8Array(obj.signature)),
+    location: maybeString(obj.location, 'Macaroon location'),
+    identifier: requireString(obj.identifier, 'Macaroon identifier'),
+    caveats: caveats,
   });
 };
+
+/**
+  Create a new Macaroon with the given root key, identifier, location
+  and signature.
+  @param {Object} The necessary values to generate a macaroon.
+    It contains the following fields:
+      identifier: {String}
+      location:   {String} (optional)
+      rootKey:    {Uint8Array}
+  @return {Macaroon} The new macaroon
+*/
+const newMacaroon = function({identifier, location, rootKey} = {}) {
+  return new Macaroon({
+    identifier: requireString(identifier, 'Macaroon identifier'),
+    location: maybeString(location, 'Macaroon location'),
+    signature: keyedHash(
+        makeKey(
+          requireUint8Array(rootKey, 'Macaroon root key')),
+          sjcl.codec.utf8String.toBits(identifier)),
+    caveats: [],
+  })
+}
 
 /**
   Gathers discharge macaroons for all third party caveats in the supplied
@@ -466,9 +506,8 @@ const dischargeMacaroon = function (macaroon, getDischarge, onOk, onError) {
   dischargeCaveats(macaroon);
 };
 
-
 module.exports = {
-  Macaroon,
-  generateMacaroons,
+  importFromJSONObject,
+  newMacaroon,
   dischargeMacaroon
 };
