@@ -44,7 +44,7 @@ test('should import from an array', t => {
     signature: '99b1c2dede0ce1cba0b632e3996e9924bdaee6287151600468644b92caf3761b',
   }];
   const macaroon = m.importFromJSONObject(objs);
-  
+
   t.equal(macaroon.length, 2);
   t.equal(macaroon[0].identifier, 'id 0');
   t.equal(macaroon[1].identifier, 'id 1');

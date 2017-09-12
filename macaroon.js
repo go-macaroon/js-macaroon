@@ -31,7 +31,7 @@ function requireString(val, label) {
 */
 function maybeString(val, label) {
   if (val === undefined || val === null) {
-    return "";
+    return '';
   }
   return requireString(val, label);
 }
@@ -47,7 +47,7 @@ function requireUint8Array(val, label) {
   if (!(val instanceof Uint8Array)) {
     throw new Error(`${label}, is not of type Uint8Array.`);
   }
-  return val
+  return val;
 }
 
 /**
@@ -195,7 +195,7 @@ const Macaroon = class Macaroon {
     this._location = location;
     this._identifier = identifier;
     this._signature = signature;
-    this._caveats = caveats
+    this._caveats = caveats;
   }
 
   get location() {
@@ -294,12 +294,12 @@ const Macaroon = class Macaroon {
     const obj = {
       identifier: this.identifier,
       signature: sjcl.codec.hex.fromBits(this._signature),
+    };
+    if (this.location) {
+      obj.location = this.location;
     }
-    if (this.location){
-    	obj.location = this.location
-    }
-    if (this._caveats.length > 0){
-       obj.caveats = this._caveats.map(caveat => {
+    if (this._caveats.length > 0) {
+      obj.caveats = this._caveats.map(caveat => {
         const caveatObj = {
           cid: caveat._identifier
         };
@@ -309,9 +309,9 @@ const Macaroon = class Macaroon {
           caveatObj.cl = caveat._location;
         }
         return caveatObj;
-      })
+      });
     }
-    return obj
+    return obj;
   }
 
   /**
@@ -397,8 +397,8 @@ const importFromJSONObject = function(obj) {
   if (Array.isArray(obj)) {
     return obj.map(val => importFromJSONObject(val));
   }
-  let caveats = []
-  if (obj.caveats !== undefined){
+  let caveats = [];
+  if (obj.caveats !== undefined) {
     caveats = obj.caveats.map(caveat => {
       const _caveat = {
         _identifier: requireString(caveat.cid, 'Caveat id'),
@@ -412,7 +412,7 @@ const importFromJSONObject = function(obj) {
         _caveat._vid = sjcl.codec.base64.toBits(requireString(caveat.vid, 'Caveat verification id'), true);
       }
       return _caveat;
-    })
+    });
   }
   return new Macaroon({
     signature: uint8ArrayToBitArray(hexToUint8Array(obj.signature)),
@@ -441,8 +441,8 @@ const newMacaroon = function({identifier, location, rootKey} = {}) {
           requireUint8Array(rootKey, 'Macaroon root key')),
           sjcl.codec.utf8String.toBits(identifier)),
     caveats: [],
-  })
-}
+  });
+};
 
 /**
   Gathers discharge macaroons for all third party caveats in the supplied
