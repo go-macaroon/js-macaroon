@@ -5,10 +5,6 @@ const nacl = require('tweetnacl');
 nacl.util = require('tweetnacl-util');
 const varint = require('varint');
 
-function toVarintBuf(number) {
-  return Buffer.from(varint.encode(number));
-}
-
 const NONCELEN = 24;
 
 const V2_TYPES = {
@@ -17,6 +13,19 @@ const V2_TYPES = {
   VID: 4,
   SIGNATURE: 6
 };
+
+// Uses protobuf-style varints
+function toVarintBuf(number) {
+  return Buffer.from(varint.encode(number));
+}
+
+function base64url(buf) {
+  return Buffer.from(buf, 'base64')
+    .toString('base64')
+    .replace(/=/g, '')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_');
+}
 
 /**
   Check that supplied value is a string and return it. Throws an
@@ -299,6 +308,7 @@ const Macaroon = class Macaroon {
   }
 
   /**
+   * (DEPRECATED)
     Returns a JSON compatible object representation of this macaroon.
     @return {Object} JSON compatible representation of this macaroon.
   */
@@ -323,6 +333,33 @@ const Macaroon = class Macaroon {
         return caveatObj;
       });
     }
+    return obj;
+  }
+
+  /**
+    Returns the V2 JSON serialization of this macaroon.
+    @return {Object} JSON serialization of this macaroon.
+  */
+  serializeJson() {
+    const obj = {
+      v: 2, // version
+      i: this._identifier,
+      s64: base64url(sjcl.codec.base64.fromBits(this._signature)),
+    };
+    if (this._location) {
+      obj.l = this._location;
+    }
+    obj.c = this._caveats.map(caveat => {
+      const caveatObj = {
+        i: caveat._identifier
+      };
+      if (caveat._vid !== null) {
+        // Use URL encoding and do not append "=" characters.
+        caveatObj.v64 = sjcl.codec.base64.fromBits(caveat._vid, true, true);
+        caveatObj.l = caveat._location;
+      }
+      return caveatObj;
+    });
     return obj;
   }
 
@@ -490,6 +527,45 @@ const importFromJSONObject = function(obj) {
     signature: uint8ArrayToBitArray(hexToUint8Array(obj.signature)),
     location: maybeString(obj.location, 'Macaroon location'),
     identifier: requireString(obj.identifier, 'Macaroon identifier'),
+    caveats: caveats,
+  });
+};
+
+
+function deserializeJsonField(obj, key, required) {
+  if (obj.hasOwnProperty(key + '64')) {
+    return sjcl.codec.base64.toBits(Buffer.from(obj[key + '64'], 'base64').toString('base64'));
+  } else if (obj.hasOwnProperty(key)) {
+    return obj[key];
+  } else if (required) {
+    throw new Error('Expected key: ' + key);
+  } else {
+    return null;
+  }
+}
+
+/**
+ * Deserializes V2 JSON macaroon encoding.
+ * @param {Object|Array} obj A serialized JSON macaroon
+ * @return {Macaroon}
+*/
+const deserializeJson = function(obj) {
+  if (obj.v !== 2) {
+    throw new Error('Only version 2 is supported');
+  }
+  const caveats = !Array.isArray(obj.c) || obj.c.length === 0 ?
+    [] :
+    obj.c.map(caveat => {
+      return {
+        _identifier: deserializeJsonField(caveat, 'i', true),
+        _location: deserializeJsonField(caveat, 'l'),
+        _vid: deserializeJsonField(caveat, 'v')
+      };
+    });
+  return new Macaroon({
+    signature: deserializeJsonField(obj, 's', true),
+    location: deserializeJsonField(obj, 'l'),
+    identifier: deserializeJsonField(obj, 'i', true),
     caveats: caveats,
   });
 };
@@ -677,5 +753,6 @@ module.exports = {
   importFromJSONObject,
   newMacaroon,
   dischargeMacaroon,
-  deserializeBinary
+  deserializeBinary,
+  deserializeJson
 };
