@@ -353,7 +353,7 @@ const Macaroon = class Macaroon {
       const caveatObj = {
         i: caveat._identifier
       };
-      if (caveat._vid !== null) {
+      if (!!caveat._vid) {
         // Use URL encoding and do not append "=" characters.
         caveatObj.v64 = sjcl.codec.base64.fromBits(caveat._vid, true, true);
         caveatObj.l = caveat._location;
@@ -455,7 +455,7 @@ const Macaroon = class Macaroon {
     let caveatSig = keyedHash(
       rootKey, sjcl.codec.utf8String.toBits(this.identifier));
     this._caveats.forEach(caveat => {
-      if (caveat._vid !== null) {
+      if (!!caveat._vid) {
         const cavKey = decrypt(caveatSig, caveat._vid);
         let found = false;
         let di, dm;
@@ -617,9 +617,9 @@ const deserializeBinary = function(serializedMacaroon) {
   const caveats = [];
   if (buf.readUInt8(offset) !== 0) {
     while (offset < buf.length) {
-      let caveatLocation;
       let caveatIdentifier;
-      let caveatVid;
+      let caveatLocation = null;
+      let caveatVid = null;
       const caveatLocationOrIdentifier = readTypeLengthValue(buf, offset);
       if (caveatLocationOrIdentifier.type === V2_TYPES.LOCATION) {
         caveatLocation = caveatLocationOrIdentifier.value.toString();
