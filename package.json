@@ -9,7 +9,8 @@
   "dependencies": {
     "sjcl": "^1.0.6",
     "tweetnacl": "^0.14.5",
-    "tweetnacl-util": "^0.15.0"
+    "tweetnacl-util": "^0.15.0",
+    "varint": "^5.0.0"
   },
   "description": "Macaroons: cookies with contextual caveats for decentralized authorization in the cloud.",
   "devDependencies": {

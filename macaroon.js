@@ -3,8 +3,29 @@
 const sjcl = require('sjcl');
 const nacl = require('tweetnacl');
 nacl.util = require('tweetnacl-util');
+const varint = require('varint');
 
 const NONCELEN = 24;
+
+const V2_TYPES = {
+  LOCATION: 1,
+  IDENTIFIER: 2,
+  VID: 4,
+  SIGNATURE: 6
+};
+
+// Uses protobuf-style varints
+function toVarintBuf(number) {
+  return Buffer.from(varint.encode(number));
+}
+
+function base64url(buf) {
+  return Buffer.from(buf, 'base64')
+    .toString('base64')
+    .replace(/=/g, '')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_');
+}
 
 /**
   Check that supplied value is a string and return it. Throws an
@@ -287,6 +308,7 @@ const Macaroon = class Macaroon {
   }
 
   /**
+   * (DEPRECATED)
     Returns a JSON compatible object representation of this macaroon.
     @return {Object} JSON compatible representation of this macaroon.
   */
@@ -312,6 +334,94 @@ const Macaroon = class Macaroon {
       });
     }
     return obj;
+  }
+
+  /**
+    Returns the V2 JSON serialization of this macaroon.
+    @return {Object} JSON serialization of this macaroon.
+  */
+  serializeJson() {
+    const obj = {
+      v: 2, // version
+      i: this._identifier,
+      s64: base64url(sjcl.codec.base64.fromBits(this._signature)),
+    };
+    if (this._location) {
+      obj.l = this._location;
+    }
+    obj.c = this._caveats.map(caveat => {
+      const caveatObj = {
+        i: caveat._identifier
+      };
+      if (!!caveat._vid) {
+        // Use URL encoding and do not append "=" characters.
+        caveatObj.v64 = sjcl.codec.base64.fromBits(caveat._vid, true, true);
+        caveatObj.l = caveat._location;
+      }
+      return caveatObj;
+    });
+    return obj;
+  }
+
+  /**
+   * Serializes the macaroon using the v2 binary format.
+   * @return {Buffer} Serialized macaroon
+   */
+  serializeBinary() {
+    const EOS = Buffer.from([0]);
+
+    const version = Buffer.from([2]);
+
+    const bufs = [
+      version,
+    ];
+
+    if (this._location) {
+      const locationBuf = Buffer.from(this._location);
+      bufs.push(toVarintBuf(V2_TYPES.LOCATION));
+      bufs.push(toVarintBuf(locationBuf.length));
+      bufs.push(locationBuf);
+    }
+
+    const identifierBuf = Buffer.from(this._identifier);
+    bufs.push(toVarintBuf(V2_TYPES.IDENTIFIER));
+    bufs.push(toVarintBuf(identifierBuf.length));
+    bufs.push(identifierBuf);
+
+    bufs.push(EOS);
+
+    for (let caveat of this._caveats) {
+      if (caveat._location) {
+        bufs.push(toVarintBuf(V2_TYPES.LOCATION));
+        const caveatLocationBuf = Buffer.from(caveat._location);
+        bufs.push(toVarintBuf(caveatLocationBuf.length));
+        bufs.push(caveatLocationBuf);
+      }
+
+      bufs.push(toVarintBuf(V2_TYPES.IDENTIFIER));
+      const caveatIdentifierBuf = Buffer.from(caveat._identifier);
+      bufs.push(toVarintBuf(caveatIdentifierBuf.length));
+      bufs.push(caveatIdentifierBuf);
+
+      if (caveat._vid) {
+        bufs.push(toVarintBuf(V2_TYPES.VID));
+        // TODO better way to convert from sjcl bitArry to Buffer?
+        const caveatVidBuf = Buffer.from(sjcl.codec.hex.fromBits(caveat._vid), 'hex');
+        bufs.push(toVarintBuf(caveatVidBuf.length));
+        bufs.push(caveatVidBuf);
+      }
+
+      bufs.push(EOS);
+    }
+
+    bufs.push(EOS);
+    // TODO better way to convert from sjcl bitArry to Buffer?
+    bufs.push(toVarintBuf(V2_TYPES.SIGNATURE));
+    const signatureBuf = Buffer.from(sjcl.codec.hex.fromBits(this._signature), 'hex');
+    bufs.push(toVarintBuf(signatureBuf.length));
+    bufs.push(signatureBuf);
+
+    return Buffer.concat(bufs);
   }
 
   /**
@@ -345,7 +455,7 @@ const Macaroon = class Macaroon {
     let caveatSig = keyedHash(
       rootKey, sjcl.codec.utf8String.toBits(this.identifier));
     this._caveats.forEach(caveat => {
-      if (caveat._vid !== null) {
+      if (!!caveat._vid) {
         const cavKey = decrypt(caveatSig, caveat._vid);
         let found = false;
         let di, dm;
@@ -389,7 +499,6 @@ const Macaroon = class Macaroon {
   Returns macaroon instances based on the JSON-decoded object
   in the argument. If this is passed an array, it will decode
   all the macaroons in the array.
-  TODO accept version 2 format.
   @param {Object|Array} obj A deserialized JSON macaroon or an array of them.
   @return {Macaroon}
 */
@@ -419,6 +528,140 @@ const importFromJSONObject = function(obj) {
     location: maybeString(obj.location, 'Macaroon location'),
     identifier: requireString(obj.identifier, 'Macaroon identifier'),
     caveats: caveats,
+  });
+};
+
+
+function deserializeJsonField(obj, key, required) {
+  if (obj.hasOwnProperty(key + '64')) {
+    return sjcl.codec.base64.toBits(Buffer.from(obj[key + '64'], 'base64').toString('base64'));
+  } else if (obj.hasOwnProperty(key)) {
+    return obj[key];
+  } else if (required) {
+    throw new Error('Expected key: ' + key);
+  } else {
+    return null;
+  }
+}
+
+/**
+ * Deserializes V2 JSON macaroon encoding.
+ * @param {Object|Array} obj A serialized JSON macaroon
+ * @return {Macaroon}
+*/
+const deserializeJson = function(obj) {
+  if (obj.v !== 2) {
+    throw new Error('Only version 2 is supported');
+  }
+  const caveats = !Array.isArray(obj.c) || obj.c.length === 0 ?
+    [] :
+    obj.c.map(caveat => {
+      return {
+        _identifier: deserializeJsonField(caveat, 'i', true),
+        _location: deserializeJsonField(caveat, 'l'),
+        _vid: deserializeJsonField(caveat, 'v')
+      };
+    });
+  return new Macaroon({
+    signature: deserializeJsonField(obj, 's', true),
+    location: deserializeJsonField(obj, 'l'),
+    identifier: deserializeJsonField(obj, 'i', true),
+    caveats: caveats,
+  });
+};
+
+function readTypeLengthValue(buf, offset, expectedType) {
+  let o = offset;
+  const type = varint.decode(buf, o);
+  if (expectedType && type !== V2_TYPES[expectedType]) {
+    throw new Error('Expected ' + expectedType + ' at position: ' + o + ' (found: ' + type + ')');
+  }
+  o += varint.decode.bytes;
+  const lengthLength = varint.decode(buf, o);
+  o += varint.decode.bytes;
+  const value = buf.slice(o, o + lengthLength);
+  return {
+    type,
+    value,
+    bytes: o + lengthLength - offset
+  };
+}
+
+/**
+ * Deserialize a macaroon from the v2 binary format
+ * @param {Buffer|Base64-Encoded String} serializedMacaroon
+ * @return {Macaroon}
+ */
+const deserializeBinary = function(serializedMacaroon) {
+  const buf = Buffer.from(serializedMacaroon, 'base64');
+  let offset = 0;
+
+  const version = buf.readUInt8(offset++);
+  if (version !== 2) {
+    throw new Error('Only version 2 is supported');
+  }
+
+  let location = '';
+  const next = readTypeLengthValue(buf, offset);
+  if (next.type === V2_TYPES.LOCATION) {
+    location = next.value.toString();
+    offset += next.bytes;
+  }
+
+  const identifierRead = readTypeLengthValue(buf, offset, 'IDENTIFIER');
+  const identifier = identifierRead.value.toString();
+  offset += identifierRead.bytes;
+
+  offset++; // EOS
+
+  const caveats = [];
+  if (buf.readUInt8(offset) !== 0) {
+    while (offset < buf.length) {
+      let caveatIdentifier;
+      let caveatLocation = null;
+      let caveatVid = null;
+      const caveatLocationOrIdentifier = readTypeLengthValue(buf, offset);
+      if (caveatLocationOrIdentifier.type === V2_TYPES.LOCATION) {
+        caveatLocation = caveatLocationOrIdentifier.value.toString();
+        offset += caveatLocationOrIdentifier.bytes;
+      }
+
+      const caveatIdentifierRead = readTypeLengthValue(buf, offset, 'IDENTIFIER');
+      caveatIdentifier = caveatIdentifierRead.value.toString();
+      offset += caveatIdentifierRead.bytes;
+
+      // If location is set, vid is also required
+      if (typeof caveatLocation === 'string') {
+        const caveatVidRead = readTypeLengthValue(buf, offset, 'VID');
+        caveatVid = sjcl.codec.hex.toBits(caveatVidRead.value.toString('hex'));
+        offset += caveatVidRead.bytes;
+      }
+
+      offset++; // EOS
+
+      caveats.push({
+        _location: caveatLocation,
+        _identifier: caveatIdentifier,
+        _vid: caveatVid
+      });
+
+      // Check if the next thing is an EOS
+      if (buf.readUInt8(offset) === 0) {
+        break;
+      }
+    }
+  }
+
+  offset++; // EOS
+
+  const signatureRead = readTypeLengthValue(buf, offset, 'SIGNATURE');
+  const signature = sjcl.codec.hex.toBits(signatureRead.value.toString('hex'));
+
+  return new Macaroon({
+    identifier,
+    location,
+    signature,
+    caveats
   });
 };
 
@@ -509,5 +752,7 @@ const dischargeMacaroon = function (macaroon, getDischarge, onOk, onError) {
 module.exports = {
   importFromJSONObject,
   newMacaroon,
-  dischargeMacaroon
+  dischargeMacaroon,
+  deserializeBinary,
+  deserializeJson
 };
