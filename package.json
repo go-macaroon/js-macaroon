@@ -7,10 +7,15 @@
     "Jeff Pihach (https://fromanegg.com)"
   ],
   "dependencies": {
+    "base64-js": "^1.2.1",
+    "benchmark": "^2.1.4",
+    "microtime": "^2.1.6",
+    "rewire": "^2.5.2",
     "sjcl": "^1.0.6",
+    "text-encoding": "^0.6.4",
     "tweetnacl": "^0.14.5",
     "tweetnacl-util": "^0.15.0",
-    "varint": "^5.0.0"
+    "uglifyjs": "^2.4.11"
   },
   "description": "Macaroons: cookies with contextual caveats for decentralized authorization in the cloud.",
   "devDependencies": {

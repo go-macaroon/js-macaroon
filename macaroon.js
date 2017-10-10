@@ -2,30 +2,267 @@
 
 const sjcl = require('sjcl');
 const nacl = require('tweetnacl');
+const textEncoding = require('text-encoding');
 nacl.util = require('tweetnacl-util');
-const varint = require('varint');
+const utf8Encoder = new textEncoding.TextEncoder('utf-8');
+const utf8Decoder = new textEncoding.TextDecoder('utf-8', {fatal: true});
 
 const NONCELEN = 24;
 
-const V2_TYPES = {
-  LOCATION: 1,
-  IDENTIFIER: 2,
-  VID: 4,
-  SIGNATURE: 6
+const FIELD_EOS = 0;
+const FIELD_LOCATION = 1;
+const FIELD_IDENTIFIER = 2;
+const FIELD_VID = 4;
+const FIELD_SIGNATURE = 6;
+
+/**
+ * Convert a string to a Uint8Array by utf-8
+ * encoding it.
+ * @param {string} s The string to convert.
+ * @return {Uint8Array} The resulting bytes.
+ */
+const stringToBytes = function(s) {
+  if (s === null) {
+    return null;
+  }
+  return utf8Encoder.encode(s);
 };
 
-// Uses protobuf-style varints
-function toVarintBuf(number) {
-  return Buffer.from(varint.encode(number));
-}
+/**
+ * Convert a Uint8Array to a string by
+ * utf-8 decoding it. Throws an exception if
+ * the bytes do not represent well-formed utf-8.
+ * @param {Uint8Array} The bytes to convert.
+ * @return {string} The resulting string.
+ */
+const bytesToString = function(b) {
+  if (b === null) {
+    return null;
+  }
+  return utf8Decoder.decode(b);
+};
 
-function base64url(buf) {
+/**
+ * The maximum integer that can be manipulated with
+ * JS bitwise operations.
+ */
+const maxInt = Math.pow(2, 32)-1;
+
+const ByteBuffer = class ByteBuffer {
+  /**
+   * Create a new ByteBuffer. A ByteBuffer holds
+   * a Uint8Array that it grows when written to.
+   * @param {int} The initial capacity of the buffer.
+   */
+  constructor(capacity) {
+    this._buf = new Uint8Array(capacity);
+    this._length = 0;
+  }
+  /**
+   * Append several bytes to the buffer.
+   * @param {Uint8Array} The bytes to append.
+   */
+  appendBytes(bytes) {
+    this._grow(this._length + bytes.length);
+    this._buf.set(bytes, this._length);
+    this._length += bytes.length;
+  }
+  /**
+   * Append a single byte to the buffer.
+   * @param {int} The byte to append
+   */
+  appendByte(byte) {
+    this._grow(this._length + 1);
+    this._buf[this._length] = byte;
+    this._length++;
+  }
+  /**
+   * Append a variable length integer to the buffer.
+   * @param {int} The number to append.
+   */
+  appendUvarint(x) {
+    if (x > maxInt || x < 0) {
+      throw new RangeError(`varint ${x} out of range`);
+    }
+    this._grow(this._length + maxVarintLen32);
+    var i = this._length;
+    while(x >= 0x80) {
+      this._buf[i++] = (x & 0xff) | 0x80;
+      x >>>= 7;
+    }
+    this._buf[i++] = x | 0;
+    this._length = i;
+  }
+  /**
+   * Return everything that has been appended to the buffer.
+   * Note that the returned array is shared with the internal buffer.
+   * @return {Uint8Array} The buffer.
+   */
+  get bytes() {
+    return this._buf.subarray(0, this._length);
+  }
+  /**
+   * Grow the internal buffer so that it's at least as but as minCap.
+   * @param {int} The minimum new capacity.
+   */
+  _grow(minCap) {
+    if (minCap <= this._capacity) {
+      return;
+    }
+    // TODO could use more intelligent logic to grow more slowly on large buffers.
+    const doubleCap = this._buf.length * 2;
+    const newCap = minCap > doubleCap ? minCap : doubleCap;
+    const newContent = new Uint8Array(newCap);
+    newContent.set(this._buf.subarray(0, this._length));
+    this._buf = newContent;
+  }
+};
+
+const maxVarintLen32 = 5;
+
+const ByteReader = class ByteReader {
+  /**
+   * Create a new ByteReader that reads from the given buffer.
+   * @param {Uint8Array} The buffer to read from.
+   */
+  constructor(bytes) {
+    this._buf = bytes;
+    this._index = 0;
+  }
+  /**
+   * Read a byte from the buffer. If there are no bytes left in the
+   * buffer, throws a RangeError exception.
+   * @return {int} The read byte.
+   */
+  readByte() {
+    if (this.length <= 0) {
+      throw new RangeError('Read past end of buffer');
+    }
+    return this._buf[this._index++];
+  }
+  /**
+   * Inspect the next byte without consuming it.
+   * If there are no bytes left in the
+   * buffer, throws a RangeError exception.
+   * @return {int} The peeked byte.
+   */
+  peekByte() {
+    if (this.length <= 0) {
+      throw new RangeError('Read past end of buffer');
+    }
+    return this._buf[this._index];
+  }
+  /**
+   * Read a number of bytes from the buffer.
+   * If there are not enough bytes left in the buffer,
+   * throws a RangeError exception.
+   * @param {int} n The number of bytes to read.
+   */
+  readN(n) {
+    if (this.length < n) {
+      throw new RangeError('Read past end of buffer');
+    }
+    const bytes = this._buf.subarray(this._index, this._index + n);
+    this._index += n;
+    return bytes;
+  }
+  /**
+   * Return the size of the buffer.
+   * @return {int} The number of bytes left to read in the buffer.
+   */
+  get length() {
+    return this._buf.length - this._index;
+  }
+  /**
+   * Read a variable length integer from the buffer.
+   * If there are not enough bytes left in the buffer
+   * or the encoded integer is too big, throws a
+   * RangeError exception.
+   * @return {int} The number that's been read.
+   */
+  readUvarint() {
+    const length = this._buf.length;
+    var x = 0;
+    var shift = 0;
+    for(var i = this._index; i < length; i++) {
+      const b = this._buf[i];
+      if (b < 0x80) {
+        const n = i - this._index;
+        this._index = i+1;
+        if (n > maxVarintLen32 || n === maxVarintLen32 && b > 1) {
+          throw new RangeError('Overflow error decoding varint');
+        }
+        return (x | (b << shift)) >>> 0;
+      }
+      x |= (b & 0x7f) << shift;
+      shift += 7;
+    }
+    this._index = length;
+    throw new RangeError('Buffer too small decoding varint');
+  }
+};
+
+const emptyBytes = new Uint8Array();
+
+/**
+ * Read a macaroon V2 field from the buffer. If the
+ * field does not have the expected type, throws an exception.
+ * @param {ByteReader} buf The buffer to read from.
+ * @param {int} expectFieldType The required field type.
+ * @return {Uint8Array} The contents of the field.
+ */
+const readFieldV2 = function(buf, expectFieldType) {
+  const fieldType = buf.readByte();
+  if (fieldType !== expectFieldType) {
+    throw new Error(`Unexpected field type, got ${fieldType} want ${expectFieldType}`);
+  }
+  if (fieldType === FIELD_EOS) {
+    return emptyBytes;
+  }
+  return buf.readN(buf.readUvarint());
+};
+
+/**
+ * Append a macaroon V2 field to the buffer.
+ * @param {ByteBuffer} buf The buffer to append to.
+ * @param {int} fieldType The type of the field.
+ * @param {Uint8Array} data The content of the field.
+ */
+const appendFieldV2 = function(buf, fieldType, data) {
+  buf.appendByte(fieldType);
+  if (fieldType !== FIELD_EOS) {
+    buf.appendUvarint(data.length);
+    buf.appendBytes(data);
+  }
+};
+
+/**
+ * Read an optionally-present macaroon V2 field from the buffer.
+ * If the field is not present, returns null.
+ * @param {ByteReader} buf The buffer to read from.
+ * @param {int} expectFieldType The expected field type.
+ * @return {Uint8Array | null} The contents of the field, or null if not present.
+ */
+const readFieldV2Optional = function(buf, maybeFieldType) {
+  if(buf.peekByte() !== maybeFieldType) {
+    return null;
+  }
+  return readFieldV2(buf, maybeFieldType);
+};
+
+/**
+ * Return the Buffer base64-encoded using URL-safe encoding
+ * without padding characters.
+ * @param {Buffer} buf The bytes to encode.
+ * @return {string} The base64-encoded bytes.
+ */
+const base64url = function(buf) {
   return Buffer.from(buf, 'base64')
     .toString('base64')
     .replace(/=/g, '')
     .replace(/\+/g, '-')
     .replace(/\//g, '_');
-}
+};
 
 /**
   Check that supplied value is a string and return it. Throws an
@@ -75,7 +312,7 @@ function requireUint8Array(val, label) {
   Converts a Uint8Array to a bitArray for use by nacl.
   @param {Uint8Array} arr The array to convert.
 */
-function uint8ArrayToBitArray(arr) {
+function bytesToBitArray(arr) {
   return sjcl.codec.base64.toBits(nacl.util.encodeBase64(arr));
 }
 
@@ -92,7 +329,7 @@ function bitArrayToUint8Array(arr) {
   @param {String} hex The hex value to convert.
   @return {Uint8Array} The resulting array.
 */
-function hexToUint8Array(hex) {
+function hexToBytes(hex) {
   const arr = new Uint8Array(Math.ceil(hex.length / 2));
   for (let i = 0; i < arr.length; i++) {
     arr[i] = parseInt(hex.substr(i * 2, 2), 16);
@@ -100,15 +337,16 @@ function hexToUint8Array(hex) {
   return arr;
 }
 
+const keyGenerator = sjcl.codec.utf8String.toBits('macaroons-key-generator');
+
 /**
   Generate a fixed length key for use as a nacl secretbox key.
   @param {Uint8Array} key The key to convert.
   @return {bitArray} sjcl compatibile bitArray.
 */
 function makeKey(key) {
-  const bitArray = uint8ArrayToBitArray(key);
-  return keyedHash(
-    sjcl.codec.utf8String.toBits('macaroons-key-generator'), bitArray);
+  const bitArray = bytesToBitArray(key);
+  return keyedHash(keyGenerator, bitArray);
 }
 
 /**
@@ -165,7 +403,7 @@ function encrypt(key, text) {
   const ciphertext = new Uint8Array(nonce.length + data.length);
   ciphertext.set(nonce, 0);
   ciphertext.set(data, nonce.length);
-  return uint8ArrayToBitArray(ciphertext);
+  return bytesToBitArray(ciphertext);
 }
 
 /**
@@ -182,7 +420,7 @@ function decrypt(key, ciphertext) {
   if (text === false) {
     throw new Error('decryption failed');
   }
-  return uint8ArrayToBitArray(text);
+  return bytesToBitArray(text);
 }
 
 const zeroKey = sjcl.codec.hex.toBits('0'.repeat(64));
@@ -245,9 +483,9 @@ const Macaroon = class Macaroon {
       _vid: null,
       _location: null,
     };
-    if (verificationId !== null) {
+    if (verificationId) {
       caveat._location = requireString(location, 'Macaroon caveat location');
-      caveat._vid = uint8ArrayToBitArray(
+      caveat._vid = bytesToBitArray(
         requireUint8Array(verificationId, 'Macaroon caveat verification id'));
     }
     this._caveats.push(caveat);
@@ -289,7 +527,7 @@ const Macaroon = class Macaroon {
     @param {Uint8Array} sig
   */
   bind(sig) {
-    sig = uint8ArrayToBitArray(sig);
+    sig = bytesToBitArray(sig);
     this._signature = bindForRequest(sig, this._signature);
   }
 
@@ -305,123 +543,6 @@ const Macaroon = class Macaroon {
       location: this._location,
       caveats: this._caveats.slice()
     });
-  }
-
-  /**
-   * (DEPRECATED)
-    Returns a JSON compatible object representation of this macaroon.
-    @return {Object} JSON compatible representation of this macaroon.
-  */
-  exportAsJSONObject() {
-    const obj = {
-      identifier: this.identifier,
-      signature: sjcl.codec.hex.fromBits(this._signature),
-    };
-    if (this.location) {
-      obj.location = this.location;
-    }
-    if (this._caveats.length > 0) {
-      obj.caveats = this._caveats.map(caveat => {
-        const caveatObj = {
-          cid: caveat._identifier
-        };
-        if (caveat._vid !== null) {
-          // Use URL encoding and do not append "=" characters.
-          caveatObj.vid = sjcl.codec.base64.fromBits(caveat._vid, true, true);
-          caveatObj.cl = caveat._location;
-        }
-        return caveatObj;
-      });
-    }
-    return obj;
-  }
-
-  /**
-    Returns the V2 JSON serialization of this macaroon.
-    @return {Object} JSON serialization of this macaroon.
-  */
-  serializeJson() {
-    const obj = {
-      v: 2, // version
-      i: this._identifier,
-      s64: base64url(sjcl.codec.base64.fromBits(this._signature)),
-    };
-    if (this._location) {
-      obj.l = this._location;
-    }
-    obj.c = this._caveats.map(caveat => {
-      const caveatObj = {
-        i: caveat._identifier
-      };
-      if (!!caveat._vid) {
-        // Use URL encoding and do not append "=" characters.
-        caveatObj.v64 = sjcl.codec.base64.fromBits(caveat._vid, true, true);
-        caveatObj.l = caveat._location;
-      }
-      return caveatObj;
-    });
-    return obj;
-  }
-
-  /**
-   * Serializes the macaroon using the v2 binary format.
-   * @return {Buffer} Serialized macaroon
-   */
-  serializeBinary() {
-    const EOS = Buffer.from([0]);
-
-    const version = Buffer.from([2]);
-
-    const bufs = [
-      version,
-    ];
-
-    if (this._location) {
-      const locationBuf = Buffer.from(this._location);
-      bufs.push(toVarintBuf(V2_TYPES.LOCATION));
-      bufs.push(toVarintBuf(locationBuf.length));
-      bufs.push(locationBuf);
-    }
-
-    const identifierBuf = Buffer.from(this._identifier);
-    bufs.push(toVarintBuf(V2_TYPES.IDENTIFIER));
-    bufs.push(toVarintBuf(identifierBuf.length));
-    bufs.push(identifierBuf);
-
-    bufs.push(EOS);
-
-    for (let caveat of this._caveats) {
-      if (caveat._location) {
-        bufs.push(toVarintBuf(V2_TYPES.LOCATION));
-        const caveatLocationBuf = Buffer.from(caveat._location);
-        bufs.push(toVarintBuf(caveatLocationBuf.length));
-        bufs.push(caveatLocationBuf);
-      }
-
-      bufs.push(toVarintBuf(V2_TYPES.IDENTIFIER));
-      const caveatIdentifierBuf = Buffer.from(caveat._identifier);
-      bufs.push(toVarintBuf(caveatIdentifierBuf.length));
-      bufs.push(caveatIdentifierBuf);
-
-      if (caveat._vid) {
-        bufs.push(toVarintBuf(V2_TYPES.VID));
-        // TODO better way to convert from sjcl bitArry to Buffer?
-        const caveatVidBuf = Buffer.from(sjcl.codec.hex.fromBits(caveat._vid), 'hex');
-        bufs.push(toVarintBuf(caveatVidBuf.length));
-        bufs.push(caveatVidBuf);
-      }
-
-      bufs.push(EOS);
-    }
-
-    bufs.push(EOS);
-    // TODO better way to convert from sjcl bitArry to Buffer?
-    bufs.push(toVarintBuf(V2_TYPES.SIGNATURE));
-    const signatureBuf = Buffer.from(sjcl.codec.hex.fromBits(this._signature), 'hex');
-    bufs.push(toVarintBuf(signatureBuf.length));
-    bufs.push(signatureBuf);
-
-    return Buffer.concat(bufs);
   }
 
   /**
@@ -455,7 +576,7 @@ const Macaroon = class Macaroon {
     let caveatSig = keyedHash(
       rootKey, sjcl.codec.utf8String.toBits(this.identifier));
     this._caveats.forEach(caveat => {
-      if (!!caveat._vid) {
+      if (caveat._vid) {
         const cavKey = decrypt(caveatSig, caveat._vid);
         let found = false;
         let di, dm;
@@ -493,6 +614,88 @@ const Macaroon = class Macaroon {
     }
   }
 
+  /**
+   * (DEPRECATED)
+    Returns a JSON compatible object representation of this macaroon.
+    @return {Object} JSON compatible representation of this macaroon.
+  */
+  exportAsJSONObject() {
+    const obj = {
+      identifier: this.identifier,
+      signature: sjcl.codec.hex.fromBits(this._signature),
+    };
+    if (this.location) {
+      obj.location = this.location;
+    }
+    if (this._caveats.length > 0) {
+      obj.caveats = this._caveats.map(caveat => {
+        const caveatObj = {
+          cid: caveat._identifier
+        };
+        if (caveat._vid) {
+          // Use URL encoding and do not append "=" characters.
+          caveatObj.vid = sjcl.codec.base64.fromBits(caveat._vid, true, true);
+          caveatObj.cl = caveat._location;
+        }
+        return caveatObj;
+      });
+    }
+    return obj;
+  }
+
+  /**
+    Returns the V2 JSON serialization of this macaroon.
+    @return {Object} JSON serialization of this macaroon.
+  */
+  serializeJson() {
+    const obj = {
+      v: 2, // version
+      i: this._identifier,
+      s64: base64url(sjcl.codec.base64.fromBits(this._signature)),
+    };
+    if (this._location) {
+      obj.l = this._location;
+    }
+    obj.c = this._caveats.map(caveat => {
+      const caveatObj = {
+        i: caveat._identifier
+      };
+      if (caveat._vid) {
+        // Use URL encoding and do not append "=" characters.
+        caveatObj.v64 = sjcl.codec.base64.fromBits(caveat._vid, true, true);
+        caveatObj.l = caveat._location;
+      }
+      return caveatObj;
+    });
+    return obj;
+  }
+
+  /**
+   * Serializes the macaroon using the v2 binary format.
+   * @return {Uint8Array} Serialized macaroon
+   */
+  serializeBinary() {
+    const buf = new ByteBuffer(100);
+    buf.appendByte(2);
+    if (this._location) {
+      appendFieldV2(buf, FIELD_LOCATION, stringToBytes(this._location));
+    }
+    appendFieldV2(buf, FIELD_IDENTIFIER, stringToBytes(this._identifier));
+    appendFieldV2(buf, FIELD_EOS);
+    this._caveats.forEach(function(cav) {
+      if (cav._location) {
+        appendFieldV2(buf, FIELD_LOCATION, stringToBytes(cav._location));
+      }
+      appendFieldV2(buf, FIELD_IDENTIFIER, stringToBytes(cav._identifier));
+      if (cav._vid) {
+        appendFieldV2(buf, FIELD_VID, cav._vid);
+      }
+      appendFieldV2(buf, FIELD_EOS);
+    });
+    appendFieldV2(buf, FIELD_EOS);
+    appendFieldV2(buf, FIELD_SIGNATURE, bitArrayToUint8Array(this._signature));
+    return buf.bytes;
+  };
 };
 
 /**
@@ -524,7 +727,7 @@ const importFromJSONObject = function(obj) {
     });
   }
   return new Macaroon({
-    signature: uint8ArrayToBitArray(hexToUint8Array(obj.signature)),
+    signature: bytesToBitArray(hexToBytes(obj.signature)),
     location: maybeString(obj.location, 'Macaroon location'),
     identifier: requireString(obj.identifier, 'Macaroon identifier'),
     caveats: caveats,
@@ -570,99 +773,38 @@ const deserializeJson = function(obj) {
   });
 };
 
-function readTypeLengthValue(buf, offset, expectedType) {
-  let o = offset;
-  const type = varint.decode(buf, o);
-  if (expectedType && type !== V2_TYPES[expectedType]) {
-    throw new Error('Expected ' + expectedType + ' at position: ' + o + ' (found: ' + type + ')');
-  }
-  o += varint.decode.bytes;
-  const lengthLength = varint.decode(buf, o);
-  o += varint.decode.bytes;
-  const value = buf.slice(o, o + lengthLength);
-  return {
-    type,
-    value,
-    bytes: o + lengthLength - offset
-  };
-}
-
 /**
  * Deserialize a macaroon from the v2 binary format
- * @param {Buffer|Base64-Encoded String} serializedMacaroon
+ * @param {Uint8Array} bytes, the serialized macaroon.
  * @return {Macaroon}
  */
-const deserializeBinary = function(serializedMacaroon) {
-  const buf = Buffer.from(serializedMacaroon, 'base64');
-  let offset = 0;
-
-  const version = buf.readUInt8(offset++);
+const deserializeBinary = function(bytes) {
+  const buf = new ByteReader(bytes);
+  const version = buf.readByte();
   if (version !== 2) {
-    throw new Error('Only version 2 is supported');
+    throw new Error(`Only version 2 is supported, found version ${version}`);
   }
-
-  let location = '';
-  const next = readTypeLengthValue(buf, offset);
-  if (next.type === V2_TYPES.LOCATION) {
-    location = next.value.toString();
-    offset += next.bytes;
-  }
-
-  const identifierRead = readTypeLengthValue(buf, offset, 'IDENTIFIER');
-  const identifier = identifierRead.value.toString();
-  offset += identifierRead.bytes;
-
-  offset++; // EOS
-
-  const caveats = [];
-  if (buf.readUInt8(offset) !== 0) {
-    while (offset < buf.length) {
-      let caveatIdentifier;
-      let caveatLocation = null;
-      let caveatVid = null;
-      const caveatLocationOrIdentifier = readTypeLengthValue(buf, offset);
-      if (caveatLocationOrIdentifier.type === V2_TYPES.LOCATION) {
-        caveatLocation = caveatLocationOrIdentifier.value.toString();
-        offset += caveatLocationOrIdentifier.bytes;
-      }
-
-      const caveatIdentifierRead = readTypeLengthValue(buf, offset, 'IDENTIFIER');
-      caveatIdentifier = caveatIdentifierRead.value.toString();
-      offset += caveatIdentifierRead.bytes;
-
-      // If location is set, vid is also required
-      if (typeof caveatLocation === 'string') {
-        const caveatVidRead = readTypeLengthValue(buf, offset, 'VID');
-        caveatVid = sjcl.codec.hex.toBits(caveatVidRead.value.toString('hex'));
-        offset += caveatVidRead.bytes;
-      }
-
-      offset++; // EOS
-
-      caveats.push({
-        _location: caveatLocation,
-        _identifier: caveatIdentifier,
-        _vid: caveatVid
-      });
-
-      // Check if the next thing is an EOS
-      if (buf.readUInt8(offset) === 0) {
-        break;
-      }
+  const params = {};
+  params.location = bytesToString(readFieldV2Optional(buf, FIELD_LOCATION));
+  params.identifier = bytesToString(readFieldV2(buf, FIELD_IDENTIFIER));
+  readFieldV2(buf, FIELD_EOS);
+  params.caveats= [];
+  for (;;) {
+    if (readFieldV2Optional(buf, FIELD_EOS) !== null) {
+      break;
     }
+    const cav = {};
+    cav._location = bytesToString(readFieldV2Optional(buf, FIELD_LOCATION));
+    cav._identifier = bytesToString(readFieldV2(buf, FIELD_IDENTIFIER));
+    cav._vid = readFieldV2Optional(buf, FIELD_VID);
+    readFieldV2(buf, FIELD_EOS);
+    params.caveats.push(cav);
   }
-
-  offset++; // EOS
-
-  const signatureRead = readTypeLengthValue(buf, offset, 'SIGNATURE');
-  const signature = sjcl.codec.hex.toBits(signatureRead.value.toString('hex'));
-
-  return new Macaroon({
-    identifier,
-    location,
-    signature,
-    caveats
-  });
+  params.signature = bytesToBitArray(readFieldV2(buf, FIELD_SIGNATURE));
+  if (buf.length !== 0) {
+    throw new Error('unexpected extra data at end of macaroon');
+  }
+  return new Macaroon(params);
 };
 
 /**
@@ -754,5 +896,5 @@ module.exports = {
   newMacaroon,
   dischargeMacaroon,
   deserializeBinary,
-  deserializeJson
+  deserializeJson,
 };

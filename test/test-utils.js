@@ -1,7 +1,7 @@
 'use strict';
 
 const m = require('../macaroon');
-
+const base64 = require('base64-js');
 const nacl = require('tweetnacl');
 nacl.util = require('tweetnacl-util');
 
@@ -21,6 +21,17 @@ module.exports.Uint8ArrayToHex = ua => {
 
 module.exports.never = () => 'condition is never true';
 
+module.exports.base64ToBytes = s => {
+  return base64.toByteArray(s);
+};
+
+module.exports.bytesToBase64 = bytes => {
+  return base64.fromByteArray(bytes);
+};
+
+module.exports.bytes = a => {
+  return new Uint8Array(a);
+};
 
 /**
   Make a set of macaroons from the given macaroon spec.
