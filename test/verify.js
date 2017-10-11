@@ -376,7 +376,7 @@ test('verify', t => {
           }
           return 'condition "' + cav + '" not met';
         };
-        if (cond.expectErr !== undefined) {
+        if (cond.expectErr) {
           t.throws(() => {
             primary.verify(rootKey, check, discharges);
           }, cond.expectErr, 'expected error ' + cond.expectErr);
@@ -385,7 +385,7 @@ test('verify', t => {
         }
         // Cloned macaroon should have the same verify result.
         const clonedPrimary = primary.clone();
-        if (cond.expectErr !== undefined) {
+        if (cond.expectErr) {
           t.throws(() => {
             clonedPrimary.verify(rootKey, check, discharges);
           }, cond.expectErr, 'expected error ' + cond.expectErr);
@@ -399,7 +399,7 @@ test('verify', t => {
 });
 
 
-const externalRootKey = testUtils.strUint8Array('root-key');
+const externalRootKey = 'root-key';
 
 // Produced by running this code: http://play.golang.org/p/Cn7q91tuql
 const externalMacaroons = [
