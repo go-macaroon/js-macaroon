@@ -9,7 +9,6 @@
   "dependencies": {
     "base64-js": "^1.2.1",
     "benchmark": "^2.1.4",
-    "lint": "^1.1.2",
     "microtime": "^2.1.6",
     "rewire": "^2.5.2",
     "sjcl": "^1.0.6",

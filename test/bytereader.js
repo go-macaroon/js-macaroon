@@ -7,62 +7,9 @@ const m = rewire('../macaroon');
 const testUtils = require('./test-utils');
 const bytes = testUtils.bytes;
 
-const ByteBuffer = m.__get__('ByteBuffer');
 const ByteReader = m.__get__('ByteReader');
 
-
-test('ByteBuffer append single byte', t => {
-  const buf = new ByteBuffer(0);
-  buf.appendByte(123);
-  t.equal(buf.bytes.toString(), '123');
-  t.end();
-});
-
-test('ByteBuffer append 10 bytes byte', t => {
-  const buf = new ByteBuffer(0);
-  for(var i = 0; i < 10; i++) {
-    buf.appendByte(i);
-  }
-  t.equal(buf.bytes.toString(), '0,1,2,3,4,5,6,7,8,9');
-  t.end();
-});
-
-test('ByteBuffer append bytes', t => {
-  const buf = new ByteBuffer(0);
-  buf.appendBytes(bytes([3,1,4,1,5,9,3]));
-  t.equal(buf.bytes.toString(), '3,1,4,1,5,9,3');
-  t.end();
-});
-
-const varintTests = [
-  [2147483648, [128, 128, 128, 128, 8]],
-  [2147483649, [129, 128, 128, 128, 8]],
-  [4294967295, [255, 255, 255, 255, 15]],
-  [0, [0]],
-  [1, [1]],
-  [2, [2]],
-  [10, [10]],
-  [20, [20]],
-  [63, [63]],
-  [64, [64]],
-  [65, [65]],
-  [127, [127]],
-  [128, [128, 1]],
-  [129, [129, 1]],
-  [255, [255, 1]],
-  [256, [128, 2]],
-  [257, [129, 2]],
-  [2147483647, [255, 255, 255, 255, 7]],
-];
-
-test('ByteBuffer appendUvarint', t => {
-  varintTests.forEach(test => {
-    const buf = new ByteBuffer(0);
-    buf.appendUvarint(test[0]);
-    t.deepEqual(buf.bytes, test[1], `test ${test[0]}`);
-  });
-  t.end();
-});
+const varintTests = require('./varint');
 
 test('ByteReader read byte', t => {
   const r = new ByteReader(bytes([0, 1, 2, 3]));
