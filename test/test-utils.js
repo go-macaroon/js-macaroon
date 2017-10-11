@@ -70,7 +70,7 @@ const makeMacaroons = mspecs => {
   const primary = macaroons[0];
   const discharges = macaroons.slice(1);
   for (i in discharges) {
-    discharges[i].bind(primary.signature);
+    discharges[i].bindToRoot(primary.signature);
   }
   return [mspecs[0].rootKey, primary, discharges];
 };

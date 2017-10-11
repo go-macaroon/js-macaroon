@@ -207,7 +207,7 @@ const stringToBytes = s => s && utf8Encoder.encode(s);
  * Convert a Uint8Array to a string by
  * utf-8 decoding it. Throws an exception if
  * the bytes do not represent well-formed utf-8.
- * @param {Uint8Array} The bytes to convert.
+ * @param {Uint8Array} b The bytes to convert.
  * @return {string} The resulting string.
  */
 const bytesToString = b => b && utf8Decoder.decode(b);
@@ -216,7 +216,7 @@ const bytesToString = b => b && utf8Decoder.decode(b);
  * Convert an sjcl bitArray to a string by
  * utf-8 decoding it. Throws an exception if
  * the bytes do not represent well-formed utf-8.
- * @param {bitArray} The bytes to convert.
+ * @param {bitArray} s The bytes to convert.
  * @return {string} The resulting string.
  */
 const bitsToString = s => sjcl.codec.utf8String.fromBits(s);
@@ -251,6 +251,7 @@ const bytesToBase64 = function(bytes) {
 /**
   Converts a Uint8Array to a bitArray for use by nacl.
   @param {Uint8Array} arr The array to convert.
+  @return {bitArray} The converted array.
 */
 const bytesToBits = function(arr) {
   // See https://github.com/bitwiseshiftleft/sjcl/issues/344 for why
@@ -261,6 +262,7 @@ const bytesToBits = function(arr) {
 /**
   Converts a bitArray to a Uint8Array.
   @param {bitArray} arr The array to convert.
+  @return {Uint8Array} The converted array.
 */
 const bitsToBytes = function(arr) {
   // See https://github.com/bitwiseshiftleft/sjcl/issues/344 for why
@@ -283,13 +285,16 @@ const hexToBytes = function(hex) {
 
 /**
  * Report whether the argument encodes a valid utf-8 string.
- * @param {Uint8Array} The bytes to check.
+ * @param {Uint8Array} bytes The bytes to check.
  * @return {bool} True if the bytes are valid utf-8.
  */
 const isValidUTF8 = function(bytes) {
   try {
     bytesToString(bytes);
   } catch (e) {
+    // While https://encoding.spec.whatwg.org states that the
+    // exception should be a TypeError, we'll be defensive here
+    // and just treat any exception as signifying invalid utf-8.
     return false;
   }
   return true;
@@ -329,7 +334,7 @@ const maybeString = function(val, label) {
   Check that supplied value is a Uint8Array or a string.
   Throws an error
   including the provided label if not.
-  @param {Uint8Array | string} val The value to assert as a Uint8Array
+  @param {(Uint8Array | string)} val The value to assert as a Uint8Array
   @param {string} label The value label.
   @return {Uint8Array} The supplied value, utf-8-encoded if it was a string.
 */
@@ -504,7 +509,7 @@ const Macaroon = class Macaroon {
   /**
     Create a new Macaroon with the given root key, identifier, location
     and signature.
-    @param {Object} The necessary values to generate a macaroon.
+    @param {Object} params The necessary values to generate a macaroon.
       It contains the following fields:
         identifierBytes: {Uint8Array}
         locationStr:   {string}
@@ -517,7 +522,7 @@ const Macaroon = class Macaroon {
       // clone uses null parameters.
       return;
     }
-    var {version, identifierBytes, locationStr, caveats, signatureBytes} = params;
+    let {version, identifierBytes, locationStr, caveats, signatureBytes} = params;
     if (version !== 1 && version !== 2) {
       throw new Error(`Unexpected version ${version}`);
     }
@@ -551,9 +556,6 @@ const Macaroon = class Macaroon {
    * @return {Array} The macaroon's caveats.
    */
   get caveats() {
-    if (!this._caveats) {
-      return [];
-    }
     return this._caveats.map(cav => {
       return cav._vidBits ? {
         identifier: bitsToBytes(cav._identifierBits),
@@ -595,8 +597,8 @@ const Macaroon = class Macaroon {
     some way, either by encrypting it with a key known to the third party or by
     holding a reference to it stored in the third party's storage.
     @param {Uint8Array} rootKeyBytes
-    @param {Uint8Array | string} caveatIdBytes
-    @param {optional String} locationStr
+    @param {(Uint8Array | string)} caveatIdBytes
+    @param {String} [locationStr]
   */
   addThirdPartyCaveat(rootKeyBytes, caveatIdBytes, locationStr) {
     const cav = {
@@ -632,7 +634,7 @@ const Macaroon = class Macaroon {
     macaroon's signature before sending the macaroons in a request.
     @param {Uint8Array} rootSig
   */
-  bind(rootSig) {
+  bindToRoot(rootSig) {
     const rootSigBits = bytesToBits(requireBytes(rootSig, 'Primary macaroon signature'));
     this._signatureBits = bindForRequest(rootSigBits, this._signatureBits);
   }
@@ -793,7 +795,7 @@ const Macaroon = class Macaroon {
    * Serializes the macaroon using the v1 binary format.
    * @return {Uint8Array} Serialized macaroon
    */
-  _serializeBinaryV2() {
+  _serializeBinaryV1() {
     throw new Error('V1 binary serialization not supported');
   };
 
@@ -1037,7 +1039,7 @@ const dischargeMacaroon = function (macaroon, getDischarge, onOk, onError) {
     if (errorCalled) {
       return;
     }
-    dm.bind(primarySig);
+    dm.bindToRoot(primarySig);
     discharges.push(dm);
     pendingCount--;
     dischargeCaveats(dm);

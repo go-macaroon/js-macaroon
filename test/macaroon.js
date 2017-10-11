@@ -142,7 +142,7 @@ test('should allow adding a third party caveat', t => {
     location: 'remote location',
   });
 
-  dm.bind(macaroon.signature);
+  dm.bindToRoot(macaroon.signature);
   macaroon.verify(rootKey, testUtils.never, [dm]);
   t.end();
 });
@@ -152,7 +152,7 @@ test('should allow binding to another macaroon', t => {
     rootKey: 'secret',
     identifier: 'some id',
   });
-  macaroon.bind(testUtils.stringToBytes('another sig'));
+  macaroon.bindToRoot(testUtils.stringToBytes('another sig'));
   t.equal(
     testUtils.bytesToHex(macaroon.signature),
     'bba29be9ed9485a594f678adad69b7071c2f353308933355fc81cfad601b8277');
