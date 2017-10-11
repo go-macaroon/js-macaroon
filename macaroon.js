@@ -16,33 +16,6 @@ const FIELD_VID = 4;
 const FIELD_SIGNATURE = 6;
 
 /**
- * Convert a string to a Uint8Array by utf-8
- * encoding it.
- * @param {string} s The string to convert.
- * @return {Uint8Array} The resulting bytes.
- */
-const stringToBytes = function(s) {
-  if (s === null) {
-    return null;
-  }
-  return utf8Encoder.encode(s);
-};
-
-/**
- * Convert a Uint8Array to a string by
- * utf-8 decoding it. Throws an exception if
- * the bytes do not represent well-formed utf-8.
- * @param {Uint8Array} The bytes to convert.
- * @return {string} The resulting string.
- */
-const bytesToString = function(b) {
-  if (b === null) {
-    return null;
-  }
-  return utf8Decoder.decode(b);
-};
-
-/**
  * The maximum integer that can be manipulated with
  * JS bitwise operations.
  */
@@ -202,6 +175,120 @@ const ByteReader = class ByteReader {
   }
 };
 
+/**
+ * Convert a string to a Uint8Array by utf-8
+ * encoding it.
+ * @param {string} s The string to convert.
+ * @return {Uint8Array} The resulting bytes.
+ */
+const stringToBytes = function(s) {
+  if (s === null) {
+    return null;
+  }
+  return utf8Encoder.encode(s);
+};
+
+/**
+ * Convert a Uint8Array to a string by
+ * utf-8 decoding it. Throws an exception if
+ * the bytes do not represent well-formed utf-8.
+ * @param {Uint8Array} The bytes to convert.
+ * @return {string} The resulting string.
+ */
+const bytesToString = function(b) {
+  if (b === null) {
+    return null;
+  }
+  return utf8Decoder.decode(b);
+};
+
+/**
+ * Return the Buffer base64-encoded using URL-safe encoding
+ * without padding characters.
+ * @param {Buffer} buf The bytes to encode.
+ * @return {string} The base64-encoded bytes.
+ */
+const base64url = function(buf) {
+  return Buffer.from(buf, 'base64')
+    .toString('base64')
+    .replace(/=/g, '')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_');
+};
+
+/**
+  Converts a Uint8Array to a bitArray for use by nacl.
+  @param {Uint8Array} arr The array to convert.
+*/
+function bytesToBitArray(arr) {
+  return sjcl.codec.base64.toBits(nacl.util.encodeBase64(arr));
+}
+
+/**
+  Converts a bitArray to a Uint8Array.
+  @param {bitArray} arr The array to convert.
+*/
+function bitArrayToUint8Array(arr) {
+  return nacl.util.decodeBase64(sjcl.codec.base64.fromBits(arr));
+}
+
+/**
+  Converts a hex to Uint8Array
+  @param {String} hex The hex value to convert.
+  @return {Uint8Array} The resulting array.
+*/
+function hexToBytes(hex) {
+  const arr = new Uint8Array(Math.ceil(hex.length / 2));
+  for (let i = 0; i < arr.length; i++) {
+    arr[i] = parseInt(hex.substr(i * 2, 2), 16);
+  }
+  return arr;
+}
+
+/**
+  Check that supplied value is a string and return it. Throws an
+  error including the provided label if not.
+  @param {String} val The value to assert as a string
+  @param {String} label The value label.
+  @return {String} The supplied value.
+*/
+function requireString(val, label) {
+  if (typeof val !== 'string') {
+    throw new Error(`${label} has the wrong type; want string got ${typeof val}.`);
+  }
+  return val;
+}
+
+/**
+  Check that supplied value is a string or undefined or null. Throws
+  an error including the provided label if not. Always returns a string
+  (the empty string if undefined or null).
+
+  @param {(String | null)} val The value to assert as a string
+  @param {String} label The value label.
+  @return {String} The supplied value or an empty string.
+*/
+function maybeString(val, label) {
+  if (val === undefined || val === null) {
+    return '';
+  }
+  return requireString(val, label);
+}
+
+/**
+  Check that supplied value is a Uint8Array. Throws an error
+  including the provided label if not.
+  @param {Uint8Array} val The value to assert as a Uint8Array
+  @param {Uint8Array} label The value label.
+  @return {Uint8Array} The supplied value.
+*/
+function requireUint8Array(val, label) {
+  if (!(val instanceof Uint8Array)) {
+    throw new Error(`${label}, is not of type Uint8Array.`);
+  }
+  return val;
+}
+
 const emptyBytes = new Uint8Array();
 
 /**
@@ -251,105 +338,6 @@ const readFieldV2Optional = function(buf, maybeFieldType) {
 };
 
 /**
- * Return the Buffer base64-encoded using URL-safe encoding
- * without padding characters.
- * @param {Buffer} buf The bytes to encode.
- * @return {string} The base64-encoded bytes.
- */
-const base64url = function(buf) {
-  return Buffer.from(buf, 'base64')
-    .toString('base64')
-    .replace(/=/g, '')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_');
-};
-
-/**
-  Check that supplied value is a string and return it. Throws an
-  error including the provided label if not.
-  @param {String} val The value to assert as a string
-  @param {String} label The value label.
-  @return {String} The supplied value.
-*/
-function requireString(val, label) {
-  if (typeof val !== 'string') {
-    throw new Error(`${label} has the wrong type; want string got ${typeof val}.`);
-  }
-  return val;
-}
-
-/**
-  Check that supplied value is a string or undefined or null. Throws
-  an error including the provided label if not. Always returns a string
-  (the empty string if undefined or null).
-
-  @param {(String | null)} val The value to assert as a string
-  @param {String} label The value label.
-  @return {String} The supplied value or an empty string.
-*/
-function maybeString(val, label) {
-  if (val === undefined || val === null) {
-    return '';
-  }
-  return requireString(val, label);
-}
-
-/**
-  Check that supplied value is a Uint8Array. Throws an error
-  including the provided label if not.
-  @param {Uint8Array} val The value to assert as a Uint8Array
-  @param {Uint8Array} label The value label.
-  @return {Uint8Array} The supplied value.
-*/
-function requireUint8Array(val, label) {
-  if (!(val instanceof Uint8Array)) {
-    throw new Error(`${label}, is not of type Uint8Array.`);
-  }
-  return val;
-}
-
-/**
-  Converts a Uint8Array to a bitArray for use by nacl.
-  @param {Uint8Array} arr The array to convert.
-*/
-function bytesToBitArray(arr) {
-  return sjcl.codec.base64.toBits(nacl.util.encodeBase64(arr));
-}
-
-/**
-  Converts a bitArray to a Uint8Array.
-  @param {bitArray} arr The array to convert.
-*/
-function bitArrayToUint8Array(arr) {
-  return nacl.util.decodeBase64(sjcl.codec.base64.fromBits(arr));
-}
-
-/**
-  Converts a hex to Uint8Array
-  @param {String} hex The hex value to convert.
-  @return {Uint8Array} The resulting array.
-*/
-function hexToBytes(hex) {
-  const arr = new Uint8Array(Math.ceil(hex.length / 2));
-  for (let i = 0; i < arr.length; i++) {
-    arr[i] = parseInt(hex.substr(i * 2, 2), 16);
-  }
-  return arr;
-}
-
-const keyGenerator = sjcl.codec.utf8String.toBits('macaroons-key-generator');
-
-/**
-  Generate a fixed length key for use as a nacl secretbox key.
-  @param {Uint8Array} key The key to convert.
-  @return {bitArray} sjcl compatibile bitArray.
-*/
-function makeKey(key) {
-  const bitArray = bytesToBitArray(key);
-  return keyedHash(keyGenerator, bitArray);
-}
-
-/**
   Generate a hash using the supplied data.
   @param {bitArray} key
   @param {bitArray} data
@@ -375,6 +363,18 @@ function keyedHash2(key, d1, d2) {
   const h1 = keyedHash(key, d1);
   const h2 = keyedHash(key, d2);
   return keyedHash(key, sjcl.bitArray.concat(h1, h2));
+}
+
+const keyGenerator = sjcl.codec.utf8String.toBits('macaroons-key-generator');
+
+/**
+  Generate a fixed length key for use as a nacl secretbox key.
+  @param {Uint8Array} key The key to convert.
+  @return {bitArray} sjcl compatibile bitArray.
+*/
+function makeKey(key) {
+  const bitArray = bytesToBitArray(key);
+  return keyedHash(keyGenerator, bitArray);
 }
 
 /**
