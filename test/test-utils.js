@@ -6,8 +6,8 @@ const textEncoding = require('text-encoding');
 const utf8Encoder = new textEncoding.TextEncoder('utf-8');
 const utf8Decoder = new textEncoding.TextDecoder('utf-8', {fatal: true});
 
-const bytesToString = b => b && utf8Decoder.decode(b);
-const stringToBytes = s => s && utf8Encoder.encode(s);
+const bytesToString = b => utf8Decoder.decode(b);
+const stringToBytes = s => utf8Encoder.encode(s);
 
 const bytesToHex = ua => {
   if (!(ua instanceof Uint8Array)) {

@@ -195,13 +195,15 @@ const ByteReader = class ByteReader {
   }
 };
 
+const isNully = x => x === undefined || x === null;
+
 /**
  * Convert a string to a Uint8Array by utf-8
  * encoding it.
  * @param {string} s The string to convert.
  * @return {Uint8Array} The resulting bytes.
  */
-const stringToBytes = s => s && utf8Encoder.encode(s);
+const stringToBytes = s => isNully(s) ? s : utf8Encoder.encode(s);
 
 /**
  * Convert a Uint8Array to a string by
@@ -210,7 +212,7 @@ const stringToBytes = s => s && utf8Encoder.encode(s);
  * @param {Uint8Array} b The bytes to convert.
  * @return {string} The resulting string.
  */
-const bytesToString = b => b && utf8Decoder.decode(b);
+const bytesToString = b => isNully(b) ? b : utf8Decoder.decode(b);
 
 /**
  * Convert an sjcl bitArray to a string by
@@ -323,12 +325,7 @@ const requireString = function(val, label) {
   @param {String} label The value label.
   @return {String} The supplied value or an empty string.
 */
-const maybeString = function(val, label) {
-  if (val === undefined || val === null) {
-    return '';
-  }
-  return requireString(val, label);
-};
+const maybeString = (val, label) => isNully(val) ? '' : requireString(val, label);
 
 /**
   Check that supplied value is a Uint8Array or a string.
@@ -390,7 +387,7 @@ const appendFieldV2 = function(buf, fieldType, data) {
  * @return {Uint8Array | null} The contents of the field, or null if not present.
  */
 const readFieldV2Optional = function(buf, maybeFieldType) {
-  if(buf.peekByte() !== maybeFieldType) {
+  if (buf.peekByte() !== maybeFieldType) {
     return null;
   }
   return readFieldV2(buf, maybeFieldType);

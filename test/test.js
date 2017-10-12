@@ -2,6 +2,7 @@
 
 require('./bytebuffer');
 require('./bytereader');
+require('./base64');
 require('./field');
 require('./macaroon');
 require('./import-export');
