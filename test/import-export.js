@@ -23,9 +23,9 @@ test('should import from a single object', t => {
 
   const macaroon = m.importFromJSONObject(obj);
   t.equal(macaroon.location, 'a location');
-  t.equal(macaroon.identifier, 'id 1');
+  t.equal(testUtils.bytesToString(macaroon.identifier), 'id 1');
   t.equal(
-    testUtils.Uint8ArrayToHex(macaroon.signature),
+    testUtils.bytesToHex(macaroon.signature),
     'e0831c334c600631bf7b860ca20c9930f584b077b8eac1f1e99c6a45d11a3d20');
   // Test that it round trips.
   const obj1 = macaroon.exportAsJSONObject();
@@ -46,8 +46,8 @@ test('should import from an array', t => {
   const macaroon = m.importFromJSONObject(objs);
 
   t.equal(macaroon.length, 2);
-  t.equal(macaroon[0].identifier, 'id 0');
-  t.equal(macaroon[1].identifier, 'id 1');
+  t.equal(testUtils.bytesToString(macaroon[0].identifier), 'id 0');
+  t.equal(testUtils.bytesToString(macaroon[1].identifier), 'id 1');
 
   t.deepEqual([
     macaroon[0].exportAsJSONObject(),

@@ -1,14 +1,15 @@
 'use strict';
 
 const m = require('../macaroon');
-const base64 = require('base64-js');
-const nacl = require('tweetnacl');
-nacl.util = require('tweetnacl-util');
 
-const strUint8Array = str => nacl.util.decodeUTF8(str);
-module.exports.strUint8Array = strUint8Array;
+const textEncoding = require('text-encoding');
+const utf8Encoder = new textEncoding.TextEncoder('utf-8');
+const utf8Decoder = new textEncoding.TextDecoder('utf-8', {fatal: true});
 
-module.exports.Uint8ArrayToHex = ua => {
+const bytesToString = b => b && utf8Decoder.decode(b);
+const stringToBytes = s => s && utf8Encoder.encode(s);
+
+const bytesToHex = ua => {
   if (!(ua instanceof Uint8Array)) {
     throw new Error('invalid Uint8Array:' + ua);
   }
@@ -19,17 +20,13 @@ module.exports.Uint8ArrayToHex = ua => {
   return hex;
 };
 
-module.exports.never = () => 'condition is never true';
+const never = () => 'condition is never true';
 
-module.exports.base64ToBytes = s => {
-  return base64.toByteArray(s);
-};
+const base64ToBytes = m.base64ToBytes;
 
-module.exports.bytesToBase64 = bytes => {
-  return base64.fromByteArray(bytes);
-};
+const bytesToBase64 = m.bytesToBase64;
 
-module.exports.bytes = a => {
+const bytes = a => {
   return new Uint8Array(a);
 };
 
@@ -45,7 +42,7 @@ module.exports.bytes = a => {
     - location: the caveat location (string, optional)
     - condition: the caveat condition (string)
 */
-module.exports.makeMacaroons = mspecs => {
+const makeMacaroons = mspecs => {
   const macaroons = [];
   let i;
   for (i in mspecs) {
@@ -55,7 +52,7 @@ module.exports.makeMacaroons = mspecs => {
       mspec.location = '';
     }
     const macaroon = m.newMacaroon({
-      rootKey: strUint8Array(mspec.rootKey),
+      rootKey: mspec.rootKey,
       identifier: mspec.id,
       location: mspec.location
     });
@@ -63,7 +60,7 @@ module.exports.makeMacaroons = mspecs => {
       const caveat = mspec.caveats[j];
       if (caveat.location !== undefined) {
         macaroon.addThirdPartyCaveat(
-          strUint8Array(caveat.rootKey), caveat.condition, caveat.location);
+          caveat.rootKey, caveat.condition, caveat.location);
       } else {
         macaroon.addFirstPartyCaveat(caveat.condition);
       }
@@ -73,7 +70,19 @@ module.exports.makeMacaroons = mspecs => {
   const primary = macaroons[0];
   const discharges = macaroons.slice(1);
   for (i in discharges) {
-    discharges[i].bind(primary.signature);
+    discharges[i].bindToRoot(primary.signature);
   }
-  return [strUint8Array(mspecs[0].rootKey), primary, discharges];
+  return [mspecs[0].rootKey, primary, discharges];
 };
+
+module.exports = {
+  bytesToString,
+  stringToBytes,
+  bytesToHex,
+  base64ToBytes,
+  bytesToBase64,
+  never,
+  bytes,
+  makeMacaroons,
+};
+

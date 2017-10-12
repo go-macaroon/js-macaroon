@@ -6,5 +6,6 @@ require('./verify');
 require('./discharge');
 require('./serialize-binary');
 require('./serialize-json');
-require('./internal');
+require('./bytebuffer');
+require('./bytereader');
 

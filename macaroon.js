@@ -2,8 +2,8 @@
 
 const sjcl = require('sjcl');
 const nacl = require('tweetnacl');
+const naclutil = require('tweetnacl-util');
 const textEncoding = require('text-encoding');
-nacl.util = require('tweetnacl-util');
 const utf8Encoder = new textEncoding.TextEncoder('utf-8');
 const utf8Decoder = new textEncoding.TextDecoder('utf-8', {fatal: true});
 
@@ -15,11 +15,31 @@ const FIELD_IDENTIFIER = 2;
 const FIELD_VID = 4;
 const FIELD_SIGNATURE = 6;
 
-/**
- * The maximum integer that can be manipulated with
- * JS bitwise operations.
- */
 const maxInt = Math.pow(2, 32)-1;
+
+/**
+ * Return a form of x suitable for including in a error message.
+ * @param {any} x The object to be converted to string form.
+ * @return {string} The converted object.
+ */
+const toString = function(x) {
+  if (x instanceof Array) {
+    // Probably bitArray, try to convert it.
+    try {x = bitsToBytes(x);} catch (e) {}
+  }
+  if (x instanceof Uint8Array) {
+    if (isValidUTF8(x)) {
+      x = bytesToString(x);
+    } else {
+      return `b64"${bytesToBase64(x)}"`;
+    }
+  }
+  if (typeof x === 'string') {
+    // TODO quote embedded double-quotes?
+    return `"${x}"`;
+  }
+  return `type ${typeof x} (${JSON.stringify(x)})`;
+};
 
 const ByteBuffer = class ByteBuffer {
   /**
@@ -181,37 +201,49 @@ const ByteReader = class ByteReader {
  * @param {string} s The string to convert.
  * @return {Uint8Array} The resulting bytes.
  */
-const stringToBytes = function(s) {
-  if (s === null) {
-    return null;
-  }
-  return utf8Encoder.encode(s);
-};
+const stringToBytes = s => s && utf8Encoder.encode(s);
 
 /**
  * Convert a Uint8Array to a string by
  * utf-8 decoding it. Throws an exception if
  * the bytes do not represent well-formed utf-8.
- * @param {Uint8Array} The bytes to convert.
+ * @param {Uint8Array} b The bytes to convert.
  * @return {string} The resulting string.
  */
-const bytesToString = function(b) {
-  if (b === null) {
-    return null;
-  }
-  return utf8Decoder.decode(b);
-};
+const bytesToString = b => b && utf8Decoder.decode(b);
 
 /**
- * Return the Buffer base64-encoded using URL-safe encoding
- * without padding characters.
- * @param {Buffer} buf The bytes to encode.
- * @return {string} The base64-encoded bytes.
+ * Convert an sjcl bitArray to a string by
+ * utf-8 decoding it. Throws an exception if
+ * the bytes do not represent well-formed utf-8.
+ * @param {bitArray} s The bytes to convert.
+ * @return {string} The resulting string.
  */
-const base64url = function(buf) {
-  return Buffer.from(buf, 'base64')
-    .toString('base64')
-    .replace(/=/g, '')
+const bitsToString = s => sjcl.codec.utf8String.fromBits(s);
+
+/**
+ * Convert a base64 string to a Uint8Array by decoding it.
+ * It copes with unpadded and URL-safe base64 encodings.
+ * @param {string} s The base64 string to decode.
+ * @return {Uint8Array} The decoded bytes.
+ */
+const base64ToBytes = function(s) {
+  s = s.replace(/-/g, '+').replace(/_/g, '/');
+  if (s.length % 4 !== 0 && !s.match(/=$/)) {
+    // Add the padding that's required by base64-js.
+    s += '='.repeat(4 - s.length % 4);
+  }
+  return naclutil.decodeBase64(s);
+};
+
+/** Convert a Uint8Array to a base64-encoded string
+ * using URL-safe, unpadded encoding.
+ * @param {Uint8Array} bytes The bytes to encode.
+ * @return {string} The base64-encoded result.
+ */
+const bytesToBase64 = function(bytes) {
+  return naclutil.encodeBase64(bytes)
+    .replace(/=+$/, '')
     .replace(/\+/g, '-')
     .replace(/\//g, '_');
 };
@@ -219,31 +251,54 @@ const base64url = function(buf) {
 /**
   Converts a Uint8Array to a bitArray for use by nacl.
   @param {Uint8Array} arr The array to convert.
+  @return {bitArray} The converted array.
 */
-function bytesToBitArray(arr) {
-  return sjcl.codec.base64.toBits(nacl.util.encodeBase64(arr));
-}
+const bytesToBits = function(arr) {
+  // See https://github.com/bitwiseshiftleft/sjcl/issues/344 for why
+  // we cannot just use sjcl.codec.bytes.toBits.
+  return sjcl.codec.base64.toBits(naclutil.encodeBase64(arr));
+};
 
 /**
   Converts a bitArray to a Uint8Array.
   @param {bitArray} arr The array to convert.
+  @return {Uint8Array} The converted array.
 */
-function bitArrayToUint8Array(arr) {
-  return nacl.util.decodeBase64(sjcl.codec.base64.fromBits(arr));
-}
+const bitsToBytes = function(arr) {
+  // See https://github.com/bitwiseshiftleft/sjcl/issues/344 for why
+  // we cannot just use sjcl.codec.bytes.toBits.
+  return naclutil.decodeBase64(sjcl.codec.base64.fromBits(arr));
+};
 
 /**
   Converts a hex to Uint8Array
   @param {String} hex The hex value to convert.
   @return {Uint8Array} The resulting array.
 */
-function hexToBytes(hex) {
+const hexToBytes = function(hex) {
   const arr = new Uint8Array(Math.ceil(hex.length / 2));
   for (let i = 0; i < arr.length; i++) {
     arr[i] = parseInt(hex.substr(i * 2, 2), 16);
   }
   return arr;
-}
+};
+
+/**
+ * Report whether the argument encodes a valid utf-8 string.
+ * @param {Uint8Array} bytes The bytes to check.
+ * @return {bool} True if the bytes are valid utf-8.
+ */
+const isValidUTF8 = function(bytes) {
+  try {
+    bytesToString(bytes);
+  } catch (e) {
+    // While https://encoding.spec.whatwg.org states that the
+    // exception should be a TypeError, we'll be defensive here
+    // and just treat any exception as signifying invalid utf-8.
+    return false;
+  }
+  return true;
+};
 
 /**
   Check that supplied value is a string and return it. Throws an
@@ -252,12 +307,12 @@ function hexToBytes(hex) {
   @param {String} label The value label.
   @return {String} The supplied value.
 */
-function requireString(val, label) {
+const requireString = function(val, label) {
   if (typeof val !== 'string') {
-    throw new Error(`${label} has the wrong type; want string got ${typeof val}.`);
+    throw new TypeError(`${label} has the wrong type; want string, got ${typeof val}.`);
   }
   return val;
-}
+};
 
 /**
   Check that supplied value is a string or undefined or null. Throws
@@ -268,26 +323,30 @@ function requireString(val, label) {
   @param {String} label The value label.
   @return {String} The supplied value or an empty string.
 */
-function maybeString(val, label) {
+const maybeString = function(val, label) {
   if (val === undefined || val === null) {
     return '';
   }
   return requireString(val, label);
-}
+};
 
 /**
-  Check that supplied value is a Uint8Array. Throws an error
+  Check that supplied value is a Uint8Array or a string.
+  Throws an error
   including the provided label if not.
-  @param {Uint8Array} val The value to assert as a Uint8Array
-  @param {Uint8Array} label The value label.
-  @return {Uint8Array} The supplied value.
+  @param {(Uint8Array | string)} val The value to assert as a Uint8Array
+  @param {string} label The value label.
+  @return {Uint8Array} The supplied value, utf-8-encoded if it was a string.
 */
-function requireUint8Array(val, label) {
-  if (!(val instanceof Uint8Array)) {
-    throw new Error(`${label}, is not of type Uint8Array.`);
+const requireBytes = function(val, label) {
+  if (val instanceof Uint8Array) {
+    return val;
   }
-  return val;
-}
+  if (typeof(val) === 'string') {
+    return stringToBytes(val);
+  }
+  throw new TypeError(`${label} has the wrong type; want string or Uint8Array, got ${typeof val}.`);
+};
 
 const emptyBytes = new Uint8Array();
 
@@ -338,159 +397,198 @@ const readFieldV2Optional = function(buf, maybeFieldType) {
 };
 
 /**
+ * Sets a field in a V2 encoded JSON object.
+ * @param {Object} obj The JSON object.
+ * @param {string} key The key to set.
+ * @param {Uint8Array} valBytes The key's value.
+ */
+const setJSONFieldV2 = function(obj, key, valBytes) {
+  if (isValidUTF8(valBytes)) {
+    obj[key] = bytesToString(valBytes);
+  } else {
+    obj[key + '64'] = bytesToBase64(valBytes);
+  }
+};
+
+/**
   Generate a hash using the supplied data.
   @param {bitArray} key
   @param {bitArray} data
   @return {bitArray} The keyed hash of the supplied data as a sjcl bitArray.
 */
-function keyedHash(key, data) {
-  const hash = new sjcl.misc.hmac(key, sjcl.hash.sha256);
-  hash.update(data);
+const keyedHash = function(keyBits, dataBits) {
+  const hash = new sjcl.misc.hmac(keyBits, sjcl.hash.sha256);
+  hash.update(dataBits);
   return hash.digest();
-}
+};
 
 /**
   Generate a hash keyed with key of both data objects.
-  @param {bitArray} key
-  @param {bitArray} d1
-  @param {bitArray} d2
+  @param {bitArray} keyBits
+  @param {bitArray} d1Bits
+  @param {bitArray} d2Bits
   @return {bitArray} The keyed hash of d1 and d2 as a sjcl bitArray.
 */
-function keyedHash2(key, d1, d2) {
-  if (d1 === null) {
-    return keyedHash(key, d2);
-  }
-  const h1 = keyedHash(key, d1);
-  const h2 = keyedHash(key, d2);
-  return keyedHash(key, sjcl.bitArray.concat(h1, h2));
-}
+const keyedHash2 = function(keyBits, d1Bits, d2Bits) {
+  const h1Bits = keyedHash(keyBits, d1Bits);
+  const h2Bits = keyedHash(keyBits, d2Bits);
+  return keyedHash(keyBits, sjcl.bitArray.concat(h1Bits, h2Bits));
+};
 
-const keyGenerator = sjcl.codec.utf8String.toBits('macaroons-key-generator');
+const keyGeneratorBits = bytesToBits(stringToBytes('macaroons-key-generator'));
 
 /**
   Generate a fixed length key for use as a nacl secretbox key.
-  @param {Uint8Array} key The key to convert.
-  @return {bitArray} sjcl compatibile bitArray.
+  @param {bitArray} keyBits The key to convert.
+  @return {bitArray} sjcl bitArray.
 */
-function makeKey(key) {
-  const bitArray = bytesToBitArray(key);
-  return keyedHash(keyGenerator, bitArray);
-}
+const makeKey = function(keyBits) {
+  return keyedHash(keyGeneratorBits, keyBits);
+};
 
 /**
   Generate a random nonce as Uint8Array.
   @return {Uint8Array} nonce.
 */
-function newNonce() {
-  const nonce = nacl.randomBytes(NONCELEN);
-  // XXX provide a way to mock this out
-  for (let i = 0; i < nonce.length; i++) {
-    nonce[i] = 0;
-  }
-  return nonce;
+const newNonce = function() {
+  return nacl.randomBytes(NONCELEN);
 };
 
 /**
   Encrypt the given plaintext with the given key.
-  @param {bitArray} key sjcl bitArray key.
-  @param {bitArray} text paintext to encrypt as sjcl bitArray.
+  @param {bitArray} keyBits encryption key.
+  @param {bitArray} textBits plaintext.
+  @return {bitArray} encrypted text.
 */
-function encrypt(key, text) {
-  const nonce = newNonce();
-  key = bitArrayToUint8Array(key);
-  text = bitArrayToUint8Array(text);
-  const data = nacl.secretbox(text, nonce, key);
-  const ciphertext = new Uint8Array(nonce.length + data.length);
-  ciphertext.set(nonce, 0);
-  ciphertext.set(data, nonce.length);
-  return bytesToBitArray(ciphertext);
-}
+const encrypt = function(keyBits, textBits) {
+  const keyBytes = bitsToBytes(keyBits);
+  const textBytes = bitsToBytes(textBits);
+  const nonceBytes = newNonce();
+  const dataBytes = nacl.secretbox(textBytes, nonceBytes, keyBytes);
+  const ciphertextBytes = new Uint8Array(nonceBytes.length + dataBytes.length);
+  ciphertextBytes.set(nonceBytes, 0);
+  ciphertextBytes.set(dataBytes, nonceBytes.length);
+  return bytesToBits(ciphertextBytes);
+};
 
 /**
-  Decrypts the given cyphertest
-  @param {bitArray} key An sjcl bitArray.
-  @param {bitArray} ciphertext An sjcl bitArray as returned by encrypt.
+  Decrypts the given cyphertext.
+  @param {bitArray} keyBits decryption key.
+  @param {bitArray} ciphertextBits encrypted text.
+  @return {bitArray} decrypted text.
 */
-function decrypt(key, ciphertext) {
-  key = bitArrayToUint8Array(key);
-  ciphertext = bitArrayToUint8Array(ciphertext);
-  const nonce = ciphertext.slice(0, NONCELEN);
-  ciphertext = ciphertext.slice(NONCELEN);
-  var text = nacl.secretbox.open(ciphertext, nonce, key);
-  if (text === false) {
+const decrypt = function(keyBits, ciphertextBits) {
+  const keyBytes = bitsToBytes(keyBits);
+  const ciphertextBytes = bitsToBytes(ciphertextBits);
+  const nonceBytes = ciphertextBytes.slice(0, NONCELEN);
+  const dataBytes = ciphertextBytes.slice(NONCELEN);
+  var textBytes = nacl.secretbox.open(dataBytes, nonceBytes, keyBytes);
+  if (textBytes === false) {
     throw new Error('decryption failed');
   }
-  return bytesToBitArray(text);
-}
+  return bytesToBits(textBytes);
+};
 
-const zeroKey = sjcl.codec.hex.toBits('0'.repeat(64));
+const zeroKeyBits = bytesToBits(stringToBytes('\0'.repeat(32)));
 
 /**
   Bind a given macaroon to the given signature of its parent macaroon. If the
   keys already match then it will return the rootSig.
-  @param {bitArray} rootSig
-  @param {bitArray} dischargeSig
-  @return {bitArray} The bound macaroon.
+  @param {bitArray} rootSigBits
+  @param {bitArray} dischargeSigBits
+  @return {bitArray} The bound macaroon signature.
 */
-function bindForRequest(rootSig, dischargeSig) {
-  if (sjcl.bitArray.equal(rootSig, dischargeSig)) {
-    return rootSig;
+const bindForRequest = function(rootSigBits, dischargeSigBits) {
+  if (sjcl.bitArray.equal(rootSigBits, dischargeSigBits)) {
+    return rootSigBits;
   }
-  return keyedHash2(zeroKey, rootSig, dischargeSig);
-}
+  return keyedHash2(zeroKeyBits, rootSigBits, dischargeSigBits);
+};
 
 const Macaroon = class Macaroon {
   /**
     Create a new Macaroon with the given root key, identifier, location
     and signature.
-    @param {Object} The necessary values to generate a macaroon.
+    @param {Object} params The necessary values to generate a macaroon.
       It contains the following fields:
-        identifier: {String}
-        location:   {String}
-        caveats:    {Array}
-        signature:  {bitarray}
+        identifierBytes: {Uint8Array}
+        locationStr:   {string}
+        caveats:    {Array of {locationStr: string, identifierBytes: Uint8Array, vidBytes: Uint8Array}}
+        signatureBytes:  {Uint8Array}
+        version: {int} The version of macaroon to create.
   */
-  constructor({identifier, location, caveats, signature}) {
-    this._location = location;
-    this._identifier = identifier;
-    this._signature = signature;
-    this._caveats = caveats;
-  }
-
-  get location() {
-    return this._location;
-  }
-
-  get identifier() {
-    return this._identifier;
-  }
-
-  get signature() {
-    return bitArrayToUint8Array(this._signature);
+  constructor(params) {
+    if (!params) {
+      // clone uses null parameters.
+      return;
+    }
+    let {version, identifierBytes, locationStr, caveats, signatureBytes} = params;
+    if (version !== 1 && version !== 2) {
+      throw new Error(`Unexpected version ${version}`);
+    }
+    this._version = version;
+    this._locationStr = locationStr;
+    identifierBytes = requireBytes(identifierBytes, 'Identifier');
+    if (version === 1 && !isValidUTF8(identifierBytes)) {
+      throw new Error('Version 1 macaroon identifier must be well-formed UTF-8');
+    }
+    this._identifierBits = identifierBytes && bytesToBits(identifierBytes);
+    this._signatureBits = signatureBytes && bytesToBits(requireBytes(signatureBytes, 'Signature'));
+    this._caveats = caveats ? caveats.map(cav => {
+      const identifierBytes = requireBytes(cav.identifierBytes, 'Caveat identifier');
+      if (version === 1 && !isValidUTF8(identifierBytes)) {
+        throw new Error('Version 1 caveat identifier must be well-formed UTF-8');
+      }
+      return {
+        _locationStr: maybeString(cav.locationStr),
+        _identifierBits: bytesToBits(identifierBytes),
+        _vidBits: cav.vidBytes && bytesToBits(requireBytes(cav.vidBytes, 'Verification ID')),
+      };
+    }) : [];
   }
 
   /**
-    Adds a first or third party caveat.
-    @param {String} caveatId
-    @param {bitArray} verificationId For a first party caveat, must be null
-      otherwise must be bitArray.
-    @param {String} location For a first party caveat, must be null otherwise
-      must be String.
-  */
-  addCaveat(caveatId, verificationId, location) {
-    const caveat = {
-      _identifier: requireString(caveatId, 'Macaroon caveat id'),
-      _vid: null,
-      _location: null,
-    };
-    if (verificationId) {
-      caveat._location = requireString(location, 'Macaroon caveat location');
-      caveat._vid = bytesToBitArray(
-        requireUint8Array(verificationId, 'Macaroon caveat verification id'));
-    }
-    this._caveats.push(caveat);
-    this._signature = keyedHash2(
-      this._signature, caveat._vid, sjcl.codec.utf8String.toBits(caveatId));
+   * Return the caveats associated with the macaroon,
+   * as an array of caveats. A caveat is represented
+   * as an object with an identifier field (Uint8Array)
+   * and (for third party caveats) a location field (string),
+   * and verification id (Uint8Array).
+   * @return {Array} The macaroon's caveats.
+   */
+  get caveats() {
+    return this._caveats.map(cav => {
+      return cav._vidBits ? {
+        identifier: bitsToBytes(cav._identifierBits),
+        location: cav._locationStr,
+        vid: bitsToBytes(cav._vidBits),
+      } : {
+        identifier: bitsToBytes(cav._identifierBits),
+      };
+    });
+  }
+
+  /**
+   * Return the location of the macaroon.
+   * @return {string} The macaroon's location.
+   */
+  get location() {
+    return this._locationStr;
+  }
+
+  /**
+   * Return the macaroon's identifier.
+   * @return {Uint8Array} The macaroon's identifier.
+   */
+  get identifier() {
+    return bitsToBytes(this._identifierBits);
+  }
+
+  /**
+   * Return the signature of the macaroon.
+   * @return {string} The macaroon's signature.
+   */
+  get signature() {
+    return bitsToBytes(this._signatureBits);
   }
 
   /**
@@ -498,37 +596,47 @@ const Macaroon = class Macaroon {
     caveat id and location hint. The caveat id should encode the root key in
     some way, either by encrypting it with a key known to the third party or by
     holding a reference to it stored in the third party's storage.
-    @param {bitArray} rootKey
-    @param {String} caveatId
-    @param {String} location
+    @param {Uint8Array} rootKeyBytes
+    @param {(Uint8Array | string)} caveatIdBytes
+    @param {String} [locationStr]
   */
-  addThirdPartyCaveat(rootKey, caveatId, location) {
-    const verificationId = bitArrayToUint8Array(
-      encrypt(this._signature,
-        makeKey(requireUint8Array(rootKey, 'Caveat root key'))));
-    this.addCaveat(
-      requireString(caveatId, 'Caveat id'),
-      verificationId,
-      requireString(location, 'Caveat location'));
+  addThirdPartyCaveat(rootKeyBytes, caveatIdBytes, locationStr) {
+    const cav = {
+      _identifierBits: bytesToBits(requireBytes(caveatIdBytes, 'Caveat id')),
+      _vidBits: encrypt(
+        this._signatureBits,
+        makeKey(bytesToBits(requireBytes(rootKeyBytes, 'Caveat root key')))),
+      _locationStr: maybeString(locationStr),
+    };
+    this._signatureBits = keyedHash2(
+      this._signatureBits,
+      cav._vidBits,
+      cav._identifierBits
+    );
+    this._caveats.push(cav);
   }
 
   /**
     Adds a caveat that will be verified by the target service.
-    @param {String} caveatId
+    @param {String | Uint8Array} caveatId
   */
-  addFirstPartyCaveat(caveatId) {
-    this.addCaveat(caveatId, null, null);
+  addFirstPartyCaveat(caveatIdBytes) {
+    const identifierBits = bytesToBits(requireBytes(caveatIdBytes, 'Condition'));
+    this._caveats.push({
+      _identifierBits: identifierBits,
+    });
+    this._signatureBits = keyedHash(this._signatureBits, identifierBits);
   }
 
   /**
-    Sets the macaroon signature to one bound to the given signature.
+    Sets the macaroon signature to one bound to the given root signature.
     This must be called on discharge macaroons with the primary
     macaroon's signature before sending the macaroons in a request.
-    @param {Uint8Array} sig
+    @param {Uint8Array} rootSig
   */
-  bind(sig) {
-    sig = bytesToBitArray(sig);
-    this._signature = bindForRequest(sig, this._signature);
+  bindToRoot(rootSig) {
+    const rootSigBits = bytesToBits(requireBytes(rootSig, 'Primary macaroon signature'));
+    this._signatureBits = bindForRequest(rootSigBits, this._signatureBits);
   }
 
   /**
@@ -537,52 +645,53 @@ const Macaroon = class Macaroon {
     @return {Macaroon} The cloned macaroon.
   */
   clone() {
-    return new Macaroon({
-      signature: this._signature,
-      identifier: this._identifier,
-      location: this._location,
-      caveats: this._caveats.slice()
-    });
+    const m = new Macaroon(null);
+    m._version = this._version;
+    m._signatureBits = this._signatureBits;
+    m._identifierBits = this._identifierBits;
+    m._locationStr = this._locationStr;
+    m._caveats = this._caveats.slice();
+    return m;
   }
 
   /**
     Verifies that the macaroon is valid. Throws exception if verification fails.
-    @param {bitArray} rootKey Must be the same that the macaroon was
+    @param {Uint8Array} rootKeyBytes Must be the same that the macaroon was
       originally created with.
     @param {Function} check Called to verify each first-party caveat. It
-      is passed the condition to check (a string) and should return an error if the condition
+      is passed the condition to check (a string) and should return an error string if the condition
       is not met, or null if satisfied.
     @param {Array} discharges
   */
-  verify(rootKey, check, discharges = []) {
-    rootKey = makeKey(rootKey);
+  verify(rootKeyBytes, check, discharges = []) {
+    const rootKeyBits = makeKey(bytesToBits(requireBytes(rootKeyBytes, 'Root key')));
     const used = discharges.map(d => 0);
 
-    this._verify(this._signature, rootKey, check, discharges, used);
+    this._verify(this._signatureBits, rootKeyBits, check, discharges, used);
 
     discharges.forEach((dm, i) => {
       if (used[i] === 0) {
         throw new Error(
-          `discharge macaroon ${JSON.stringify(dm.identifier)} was not used`);
+          `discharge macaroon ${toString(dm.identifier)} was not used`);
       }
       if (used[i] !== 1) {
         // Should be impossible because of check in verify, but be defensive.
         throw new Error(
-          `discharge macaroon ${JSON.stringify(dm.identifier)} was used more than once`);
+          `discharge macaroon ${toString(dm.identifier)} was used more than once`);
       }
     });
   }
-  _verify(rootSig, rootKey, check, discharges, used) {
-    let caveatSig = keyedHash(
-      rootKey, sjcl.codec.utf8String.toBits(this.identifier));
+
+  _verify(rootSigBits, rootKeyBits, check, discharges, used) {
+    let caveatSigBits = keyedHash(rootKeyBits, this._identifierBits);
     this._caveats.forEach(caveat => {
-      if (caveat._vid) {
-        const cavKey = decrypt(caveatSig, caveat._vid);
+      if (caveat._vidBits) {
+        const cavKeyBits = decrypt(caveatSigBits, caveat._vidBits);
         let found = false;
         let di, dm;
         for (di = 0; di < discharges.length; di++) {
           dm = discharges[di];
-          if (dm.identifier !== caveat._identifier) {
+          if (!sjcl.bitArray.equal(dm._identifierBits, caveat._identifierBits)) {
             continue;
           }
           found = true;
@@ -591,51 +700,63 @@ const Macaroon = class Macaroon {
           used[di]++;
           if (used[di] > 1) {
             throw new Error(
-              `discharge macaroon ${JSON.stringify(dm.identifier)} was used more than once`);
+              `discharge macaroon ${toString(dm.identifier)} was used more than once`);
           }
-          dm._verify(rootSig, cavKey, check, discharges, used);
+          dm._verify(rootSigBits, cavKeyBits, check, discharges, used);
           break;
         }
         if (!found) {
           throw new Error(
-            `cannot find discharge macaroon for caveat ${JSON.stringify(caveat._identifier)}`);
+            `cannot find discharge macaroon for caveat ${toString(caveat._identifierBits)}`);
         }
+        caveatSigBits = keyedHash2(caveatSigBits, caveat._vidBits, caveat._identifierBits);
       } else {
-        const err = check(caveat._identifier);
+        const cond = bitsToString(caveat._identifierBits);
+        const err = check(cond);
         if (err) {
-          throw new Error(err);
+          throw new Error(`caveat check failed (${cond}): ${err}`);
         }
+        caveatSigBits = keyedHash(caveatSigBits, caveat._identifierBits);
       }
-      caveatSig = keyedHash2(caveatSig, caveat._vid, caveat._identifier);
     });
-    const boundSig = bindForRequest(rootSig, caveatSig);
-    if (!sjcl.bitArray.equal(boundSig, this._signature)) {
+    const boundSigBits = bindForRequest(rootSigBits, caveatSigBits);
+    if (!sjcl.bitArray.equal(boundSigBits, this._signatureBits)) {
       throw new Error('signature mismatch after caveat verification');
     }
   }
 
+  exportAsJSONObject() {
+    switch (this._version) {
+      case 1:
+        return this._exportAsJSONObjectV1();
+      case 2:
+        return this._exportAsJSONObjectV2();
+      default:
+        throw new Error(`unexpected macaroon version ${this._version}`);
+    }
+  }
+
   /**
-   * (DEPRECATED)
-    Returns a JSON compatible object representation of this macaroon.
+    Returns a JSON compatible object representation of this version 1 macaroon.
     @return {Object} JSON compatible representation of this macaroon.
   */
-  exportAsJSONObject() {
+  _exportAsJSONObjectV1() {
     const obj = {
-      identifier: this.identifier,
-      signature: sjcl.codec.hex.fromBits(this._signature),
+      identifier: bitsToString(this._identifierBits),
+      signature: sjcl.codec.hex.fromBits(this._signatureBits),
     };
-    if (this.location) {
-      obj.location = this.location;
+    if (this._locationStr) {
+      obj.location = this._locationStr;
     }
     if (this._caveats.length > 0) {
       obj.caveats = this._caveats.map(caveat => {
         const caveatObj = {
-          cid: caveat._identifier
+          cid: bitsToString(caveat._identifierBits),
         };
-        if (caveat._vid) {
+        if (caveat._vidBits) {
           // Use URL encoding and do not append "=" characters.
-          caveatObj.vid = sjcl.codec.base64.fromBits(caveat._vid, true, true);
-          caveatObj.cl = caveat._location;
+          caveatObj.vid = sjcl.codec.base64.fromBits(caveat._vidBits, true, true);
+          caveatObj.cl = caveat._locationStr;
         }
         return caveatObj;
       });
@@ -645,56 +766,75 @@ const Macaroon = class Macaroon {
 
   /**
     Returns the V2 JSON serialization of this macaroon.
-    @return {Object} JSON serialization of this macaroon.
+    @return {Object} JSON compatible representation of this macaroon.
   */
-  serializeJson() {
+  _exportAsJSONObjectV2() {
     const obj = {
       v: 2, // version
-      i: this._identifier,
-      s64: base64url(sjcl.codec.base64.fromBits(this._signature)),
     };
-    if (this._location) {
-      obj.l = this._location;
+    setJSONFieldV2(obj, 's', bitsToBytes(this._signatureBits));
+    setJSONFieldV2(obj, 'i', bitsToBytes(this._identifierBits));
+    if (this._locationStr) {
+      obj.l = this._locationStr;
     }
-    obj.c = this._caveats.map(caveat => {
-      const caveatObj = {
-        i: caveat._identifier
-      };
-      if (caveat._vid) {
-        // Use URL encoding and do not append "=" characters.
-        caveatObj.v64 = sjcl.codec.base64.fromBits(caveat._vid, true, true);
-        caveatObj.l = caveat._location;
-      }
-      return caveatObj;
-    });
+    if (this._caveats && this._caveats.length > 0) {
+      obj.c = this._caveats.map(caveat => {
+        const caveatObj = {};
+        setJSONFieldV2(caveatObj, 'i', bitsToBytes(caveat._identifierBits));
+        if (caveat._vidBits) {
+          setJSONFieldV2(caveatObj, 'v', bitsToBytes(caveat._vidBits));
+          caveatObj.l = caveat._locationStr;
+        }
+        return caveatObj;
+      });
+    }
     return obj;
   }
+
+  /**
+   * Serializes the macaroon using the v1 binary format.
+   * @return {Uint8Array} Serialized macaroon
+   */
+  _serializeBinaryV1() {
+    throw new Error('V1 binary serialization not supported');
+  };
 
   /**
    * Serializes the macaroon using the v2 binary format.
    * @return {Uint8Array} Serialized macaroon
    */
-  serializeBinary() {
-    const buf = new ByteBuffer(100);
+  _serializeBinaryV2() {
+    const buf = new ByteBuffer(200);
     buf.appendByte(2);
-    if (this._location) {
-      appendFieldV2(buf, FIELD_LOCATION, stringToBytes(this._location));
+    if (this._locationStr) {
+      appendFieldV2(buf, FIELD_LOCATION, stringToBytes(this._locationStr));
     }
-    appendFieldV2(buf, FIELD_IDENTIFIER, stringToBytes(this._identifier));
+    appendFieldV2(buf, FIELD_IDENTIFIER, bitsToBytes(this._identifierBits));
     appendFieldV2(buf, FIELD_EOS);
     this._caveats.forEach(function(cav) {
-      if (cav._location) {
-        appendFieldV2(buf, FIELD_LOCATION, stringToBytes(cav._location));
+      if (cav._locationStr) {
+        appendFieldV2(buf, FIELD_LOCATION, stringToBytes(cav._locationStr));
       }
-      appendFieldV2(buf, FIELD_IDENTIFIER, stringToBytes(cav._identifier));
-      if (cav._vid) {
-        appendFieldV2(buf, FIELD_VID, cav._vid);
+      appendFieldV2(buf, FIELD_IDENTIFIER, bitsToBytes(cav._identifierBits));
+      if (cav._vidBits) {
+        appendFieldV2(buf, FIELD_VID, bitsToBytes(cav._vidBits));
       }
       appendFieldV2(buf, FIELD_EOS);
     });
     appendFieldV2(buf, FIELD_EOS);
-    appendFieldV2(buf, FIELD_SIGNATURE, bitArrayToUint8Array(this._signature));
+    appendFieldV2(buf, FIELD_SIGNATURE, bitsToBytes(this._signatureBits));
     return buf.bytes;
+  };
+
+  serializeBinary() {
+    switch (this._version) {
+      case 1:
+        return this._serializeBinaryV1();
+      case 2:
+        return this._serializeBinaryV2();
+      default:
+        throw new Error(`unexpected macaroon version ${this._version}`);
+    }
   };
 };
 
@@ -707,104 +847,145 @@ const Macaroon = class Macaroon {
 */
 const importFromJSONObject = function(obj) {
   if (Array.isArray(obj)) {
+    // TODO this probably should not allow multiple levels of array.
     return obj.map(val => importFromJSONObject(val));
   }
-  let caveats = [];
-  if (obj.caveats !== undefined) {
-    caveats = obj.caveats.map(caveat => {
-      const _caveat = {
-        _identifier: requireString(caveat.cid, 'Caveat id'),
-        _location: null,
-        _vid: null
-      };
-      if (caveat.cl !== undefined) {
-        _caveat._location = requireString(caveat.cl, 'Caveat location');
-      }
-      if (caveat.vid !== undefined) {
-        _caveat._vid = sjcl.codec.base64.toBits(requireString(caveat.vid, 'Caveat verification id'), true);
-      }
-      return _caveat;
-    });
+  if (obj.signature) {
+    // Looks like a V1 macaroon.
+    return importFromJSONObjectV1(obj);
   }
-  return new Macaroon({
-    signature: bytesToBitArray(hexToBytes(obj.signature)),
-    location: maybeString(obj.location, 'Macaroon location'),
-    identifier: requireString(obj.identifier, 'Macaroon identifier'),
-    caveats: caveats,
-  });
+  return importFromJSONObjectV2(obj);
 };
 
-
-function deserializeJsonField(obj, key, required) {
-  if (obj.hasOwnProperty(key + '64')) {
-    return sjcl.codec.base64.toBits(Buffer.from(obj[key + '64'], 'base64').toString('base64'));
-  } else if (obj.hasOwnProperty(key)) {
-    return obj[key];
-  } else if (required) {
-    throw new Error('Expected key: ' + key);
-  } else {
-    return null;
-  }
-}
+const importFromJSONObjectV1 = function(obj) {
+  const caveats = obj.caveats && obj.caveats.map(jsonCaveat => {
+    const caveat = {
+      identifierBytes: stringToBytes(requireString(jsonCaveat.cid, 'Caveat id')),
+      locationStr: maybeString(jsonCaveat.cl, 'Caveat location'),
+    };
+    if (jsonCaveat.vid) {
+      caveat.vidBytes = base64ToBytes(requireString(jsonCaveat.vid, 'Caveat verification id'));
+    }
+    return caveat;
+  });
+  return new Macaroon({
+    version: 1,
+    locationStr: maybeString(obj.location, 'Macaroon location'),
+    identifierBytes: stringToBytes(requireString(obj.identifier, 'Macaroon identifier')),
+    caveats: caveats,
+    signatureBytes: hexToBytes(obj.signature),
+  });
+};
 
 /**
  * Deserializes V2 JSON macaroon encoding.
  * @param {Object|Array} obj A serialized JSON macaroon
  * @return {Macaroon}
 */
-const deserializeJson = function(obj) {
+const importFromJSONObjectV2 = function(obj) {
   if (obj.v !== 2) {
-    throw new Error('Only version 2 is supported');
+    throw new Error(`Unsupported macaroon version ${obj.v}`);
   }
-  const caveats = !Array.isArray(obj.c) || obj.c.length === 0 ?
-    [] :
-    obj.c.map(caveat => {
+  const params = {
+    version: 2,
+    signatureBytes: v2JSONField(obj, 's', true),
+    locationStr: bytesToString(v2JSONField(obj, 'l', false)),
+    identifierBytes: v2JSONField(obj, 'i', true),
+  };
+  if (obj.c) {
+    if (!Array.isArray(obj.c)) {
+      throw new Error('caveats field does not hold an array');
+    };
+    params.caveats = obj.c.map(caveat => {
       return {
-        _identifier: deserializeJsonField(caveat, 'i', true),
-        _location: deserializeJsonField(caveat, 'l'),
-        _vid: deserializeJsonField(caveat, 'v')
+        identifierBytes: v2JSONField(caveat, 'i', true),
+        locationStr: bytesToString(v2JSONField(caveat, 'l'), false),
+        vidBytes: v2JSONField(caveat, 'v', false)
       };
     });
-  return new Macaroon({
-    signature: deserializeJsonField(obj, 's', true),
-    location: deserializeJsonField(obj, 'l'),
-    identifier: deserializeJsonField(obj, 'i', true),
-    caveats: caveats,
-  });
+  }
+  return new Macaroon(params);
+};
+
+/**
+ * Read a JSON field that might be in base64 or string
+ * format.
+ * @param {Object} obj A deserialized JSON object.
+ * @param {string} key The key name.
+ * @param {bool} required Whether the key is required to exist.
+ * @return {Uint8Array) The value of the key (or null if not present).
+ */
+const v2JSONField = function(obj, key, required) {
+  if (obj.hasOwnProperty(key)) {
+    return stringToBytes(obj[key]);
+  }
+  const key64 = key + '64';
+  if (obj.hasOwnProperty(key64)) {
+    return base64ToBytes(obj[key64]);
+  }
+  if (required) {
+    throw new Error('Expected key: ' + key);
+  }
+  return null;
 };
 
 /**
  * Deserialize a macaroon from the v2 binary format
- * @param {Uint8Array} bytes, the serialized macaroon.
+ * @param {Uint8Array} bytes The serialized macaroon.
  * @return {Macaroon}
  */
-const deserializeBinary = function(bytes) {
+const deserializeBinaryV2 = function(bytes) {
   const buf = new ByteReader(bytes);
   const version = buf.readByte();
   if (version !== 2) {
     throw new Error(`Only version 2 is supported, found version ${version}`);
   }
-  const params = {};
-  params.location = bytesToString(readFieldV2Optional(buf, FIELD_LOCATION));
-  params.identifier = bytesToString(readFieldV2(buf, FIELD_IDENTIFIER));
+  const params = {
+    version: version,
+  };
+  params.locationStr = bytesToString(readFieldV2Optional(buf, FIELD_LOCATION));
+  params.identifierBytes = readFieldV2(buf, FIELD_IDENTIFIER);
   readFieldV2(buf, FIELD_EOS);
   params.caveats= [];
   for (;;) {
-    if (readFieldV2Optional(buf, FIELD_EOS) !== null) {
+    if (readFieldV2Optional(buf, FIELD_EOS)) {
       break;
     }
     const cav = {};
-    cav._location = bytesToString(readFieldV2Optional(buf, FIELD_LOCATION));
-    cav._identifier = bytesToString(readFieldV2(buf, FIELD_IDENTIFIER));
-    cav._vid = readFieldV2Optional(buf, FIELD_VID);
+    cav.locationStr = bytesToString(readFieldV2Optional(buf, FIELD_LOCATION));
+    cav.identifierBytes = readFieldV2(buf, FIELD_IDENTIFIER);
+    cav.vidBytes = readFieldV2Optional(buf, FIELD_VID);
     readFieldV2(buf, FIELD_EOS);
     params.caveats.push(cav);
   }
-  params.signature = bytesToBitArray(readFieldV2(buf, FIELD_SIGNATURE));
+  params.signatureBytes = readFieldV2(buf, FIELD_SIGNATURE);
   if (buf.length !== 0) {
     throw new Error('unexpected extra data at end of macaroon');
   }
   return new Macaroon(params);
+};
+
+const isASCIIHex = function(charCode) {
+  return (48 <= charCode && charCode <= 58) || (97 <= charCode && charCode <= 102);
+};
+
+/**
+ * Deserialize a macaroon from binary format (currently only supports V2 format).
+ * @param {Uint8Array} bytes The serialized macaroon.
+ */
+const deserializeBinary = function(bytes) {
+  if (bytes.length === 0) {
+    throw new Error('Empty macaroon data');
+  }
+  const version = bytes[0];
+  if (version === 2) {
+    return deserializeBinaryV2(bytes);
+  }
+  if (isASCIIHex(version)) {
+    // It's a hex digit - version 1 binary format.
+    throw new Error('Version 1 binary format not supported');
+  }
+  throw new Error('Cannot determine data format of binary-encoded macaroon');
 };
 
 /**
@@ -812,20 +993,22 @@ const deserializeBinary = function(bytes) {
   and signature.
   @param {Object} The necessary values to generate a macaroon.
     It contains the following fields:
-      identifier: {String}
+      identifier: {String | Uint8Array}
       location:   {String} (optional)
-      rootKey:    {Uint8Array}
+      rootKey:    {String | Uint8Array}
+      version: {int} (optional; defaults to 2).
   @return {Macaroon} The new macaroon
 */
-const newMacaroon = function({identifier, location, rootKey} = {}) {
+const newMacaroon = function({identifier, location, rootKey, version} = {}) {
+  const identifierBytes = requireBytes(identifier, 'Macaroon identifier');
+  const rootKeyBytes = requireBytes(rootKey, 'Macaroon root key');
   return new Macaroon({
-    identifier: requireString(identifier, 'Macaroon identifier'),
-    location: maybeString(location, 'Macaroon location'),
-    signature: keyedHash(
-        makeKey(
-          requireUint8Array(rootKey, 'Macaroon root key')),
-          sjcl.codec.utf8String.toBits(identifier)),
-    caveats: [],
+    version: version === undefined ? 2 : version,
+    identifierBytes: identifierBytes,
+    locationStr: maybeString(location, 'Macaroon location'),
+    signatureBytes: bitsToBytes(keyedHash(
+        makeKey(bytesToBits(rootKeyBytes)),
+        bytesToBits(identifierBytes))),
   });
 };
 
@@ -856,7 +1039,7 @@ const dischargeMacaroon = function (macaroon, getDischarge, onOk, onError) {
     if (errorCalled) {
       return;
     }
-    dm.bind(primarySig);
+    dm.bindToRoot(primarySig);
     discharges.push(dm);
     pendingCount--;
     dischargeCaveats(dm);
@@ -871,13 +1054,13 @@ const dischargeMacaroon = function (macaroon, getDischarge, onOk, onError) {
     let cav, i;
     for (i = 0; i < m._caveats.length; i++) {
       cav = m._caveats[i];
-      if (cav._vid === null) {
+      if (!cav._vidBits) {
         continue;
       }
       getDischarge(
         firstPartyLocation,
-        cav._location,
-        cav._identifier,
+        cav._locationStr,
+        bitsToBytes(cav._identifierBits),
         dischargedCallback,
         dischargedErrorCallback
       );
@@ -892,9 +1075,10 @@ const dischargeMacaroon = function (macaroon, getDischarge, onOk, onError) {
 };
 
 module.exports = {
-  importFromJSONObject,
   newMacaroon,
   dischargeMacaroon,
+  importFromJSONObject,
   deserializeBinary,
-  deserializeJson,
+  bytesToBase64: bytesToBase64,
+  base64ToBytes: base64ToBytes,
 };
