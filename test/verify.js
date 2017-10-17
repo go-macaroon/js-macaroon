@@ -446,7 +446,7 @@ const externalMacaroons = [
 ];
 
 test('should verify external third party macaroons correctly', t => {
-  const ms = m.importFromJSONObject(externalMacaroons);
+  const ms = m.importMacaroons(externalMacaroons);
   ms[0].verify(externalRootKey, () => {}, ms.slice(1));
   t.end();
 });

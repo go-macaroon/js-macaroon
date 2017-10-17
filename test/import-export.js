@@ -5,7 +5,7 @@ const test = require('tape');
 const m = require('../macaroon');
 const testUtils = require('./test-utils');
 
-test('should import from a single object', t => {
+test('importMacaroon should import from a single object', t => {
   const obj = {
     location: 'a location',
     identifier: 'id 1',
@@ -21,19 +21,19 @@ test('should import from a single object', t => {
     ],
   };
 
-  const macaroon = m.importFromJSONObject(obj);
+  const macaroon = m.importMacaroon(obj);
   t.equal(macaroon.location, 'a location');
   t.equal(testUtils.bytesToString(macaroon.identifier), 'id 1');
   t.equal(
     testUtils.bytesToHex(macaroon.signature),
     'e0831c334c600631bf7b860ca20c9930f584b077b8eac1f1e99c6a45d11a3d20');
   // Test that it round trips.
-  const obj1 = macaroon.exportAsJSONObject();
+  const obj1 = macaroon.exportJSON();
   t.deepEqual(obj1, obj);
   t.end();
 });
 
-test('should import from an array', t => {
+test('importMacaroons should import from an array', t => {
   const objs = [{
     location: 'a location',
     identifier: 'id 0',
@@ -43,14 +43,14 @@ test('should import from an array', t => {
     identifier: 'id 1',
     signature: '99b1c2dede0ce1cba0b632e3996e9924bdaee6287151600468644b92caf3761b',
   }];
-  const macaroon = m.importFromJSONObject(objs);
+  const macaroon = m.importMacaroons(objs);
 
   t.equal(macaroon.length, 2);
   t.equal(testUtils.bytesToString(macaroon[0].identifier), 'id 0');
   t.equal(testUtils.bytesToString(macaroon[1].identifier), 'id 1');
 
   t.deepEqual([
-    macaroon[0].exportAsJSONObject(),
-    macaroon[1].exportAsJSONObject()], objs);
+    macaroon[0].exportJSON(),
+    macaroon[1].exportJSON()], objs);
   t.end();
 });

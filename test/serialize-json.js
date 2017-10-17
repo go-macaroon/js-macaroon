@@ -12,7 +12,7 @@ test('should serialize json format without caveats', t => {
     location: 'http://example.org/'
   });
 
-  t.deepEqual(macaroon.exportAsJSONObject(), {'v':2,'l':'http://example.org/','i':'keyid','s64':'fN7nklEcW8b1KEhYBd_psk54XijiqZMB-dcRxgnjjvc'});
+  t.deepEqual(macaroon.exportJSON(), {'v':2,'l':'http://example.org/','i':'keyid','s64':'fN7nklEcW8b1KEhYBd_psk54XijiqZMB-dcRxgnjjvc'});
   t.end();
 });
 
@@ -24,7 +24,7 @@ test('should serialize json format with one caveat', t => {
   });
   macaroon.addFirstPartyCaveat('account = 3735928559');
 
-  t.deepEqual(macaroon.exportAsJSONObject(), {'v':2,'l':'http://example.org/','i':'keyid','c':[{'i':'account = 3735928559'}],'s64':'9UgH9txu34i_D3MGs4IlYqNiUz2_czm6YXZdpL0lnYc'});
+  t.deepEqual(macaroon.exportJSON(), {'v':2,'l':'http://example.org/','i':'keyid','c':[{'i':'account = 3735928559'}],'s64':'9UgH9txu34i_D3MGs4IlYqNiUz2_czm6YXZdpL0lnYc'});
   t.end();
 });
 
@@ -37,12 +37,12 @@ test('should serialize json format with two caveats', t => {
   macaroon.addFirstPartyCaveat('account = 3735928559');
   macaroon.addFirstPartyCaveat('user = alice');
 
-  t.deepEqual(macaroon.exportAsJSONObject(), {'v':2,'l':'http://example.org/','i':'keyid','c':[{'i':'account = 3735928559'},{'i':'user = alice'}],'s64':'S-lnzR6gxrJrr2pKlO6bBbFYhtoLqF6MQqk8jQ4SXvw'});
+  t.deepEqual(macaroon.exportJSON(), {'v':2,'l':'http://example.org/','i':'keyid','c':[{'i':'account = 3735928559'},{'i':'user = alice'}],'s64':'S-lnzR6gxrJrr2pKlO6bBbFYhtoLqF6MQqk8jQ4SXvw'});
   t.end();
 });
 
 test('should deserialize json format without caveats', t => {
-  const macaroon = m.importFromJSONObject({'v':2,'l':'http://example.org/','i':'keyid','c':[],'s64':'fN7nklEcW8b1KEhYBd_psk54XijiqZMB-dcRxgnjjvc'});
+  const macaroon = m.importMacaroon({'v':2,'l':'http://example.org/','i':'keyid','c':[],'s64':'fN7nklEcW8b1KEhYBd_psk54XijiqZMB-dcRxgnjjvc'});
   t.equal(macaroon.location, 'http://example.org/');
   t.equal(testUtils.bytesToString(macaroon.identifier), 'keyid');
   t.equal(macaroon.caveats.length, 0);
@@ -51,7 +51,7 @@ test('should deserialize json format without caveats', t => {
 });
 
 test('should deserialize json format with one caveat', t => {
-  const macaroon = m.importFromJSONObject({'v':2,'l':'http://example.org/','i':'keyid','c':[{'i':'account = 3735928559'}],'s64':'9UgH9txu34i_D3MGs4IlYqNiUz2_czm6YXZdpL0lnYc'});
+  const macaroon = m.importMacaroon({'v':2,'l':'http://example.org/','i':'keyid','c':[{'i':'account = 3735928559'}],'s64':'9UgH9txu34i_D3MGs4IlYqNiUz2_czm6YXZdpL0lnYc'});
   t.equal(macaroon.location, 'http://example.org/');
   t.equal(testUtils.bytesToString(macaroon.identifier), 'keyid');
   const caveats = macaroon.caveats;
@@ -62,7 +62,7 @@ test('should deserialize json format with one caveat', t => {
 });
 
 test('should deserialize json format with two caveats', t => {
-  const macaroon = m.importFromJSONObject({'v':2,'l':'http://example.org/','i':'keyid','c':[{'i':'account = 3735928559'},{'i':'user = alice'}],'s64':'S-lnzR6gxrJrr2pKlO6bBbFYhtoLqF6MQqk8jQ4SXvw'});
+  const macaroon = m.importMacaroon({'v':2,'l':'http://example.org/','i':'keyid','c':[{'i':'account = 3735928559'},{'i':'user = alice'}],'s64':'S-lnzR6gxrJrr2pKlO6bBbFYhtoLqF6MQqk8jQ4SXvw'});
   t.equal(macaroon.location, 'http://example.org/');
   t.equal(testUtils.bytesToString(macaroon.identifier), 'keyid');
   const caveats = macaroon.caveats;
