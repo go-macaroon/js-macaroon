@@ -18,7 +18,7 @@ test('should be created with the expected signature', t => {
     testUtils.bytesToHex(macaroon.signature),
     'd916ce6f9b62dc4a080ce5d4a660956471f19b860da4242b0852727331c1033d');
 
-  const obj = macaroon.exportAsJSONObject();
+  const obj = macaroon.exportJSON();
   t.deepEqual(obj, {
     location: 'a location',
     identifier: 'some id',
@@ -95,7 +95,7 @@ test('should allow adding first party caveats', t => {
   t.equal(
     testUtils.bytesToHex(macaroon.signature),
     'c934e6af642ee55a4e4cfc56e07706cf1c6c94dc2192e5582943cddd88dc99d8');
-  const obj = macaroon.exportAsJSONObject();
+  const obj = macaroon.exportJSON();
   t.deepEqual(obj, {
     location: 'a location',
     identifier: 'some id',

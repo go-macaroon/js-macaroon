@@ -195,7 +195,7 @@ const ByteReader = class ByteReader {
   }
 };
 
-const isNully = x => x === undefined || x === null;
+const isValue = x => x !== undefined && x !== null;
 
 /**
  * Convert a string to a Uint8Array by utf-8
@@ -203,7 +203,7 @@ const isNully = x => x === undefined || x === null;
  * @param {string} s The string to convert.
  * @return {Uint8Array} The resulting bytes.
  */
-const stringToBytes = s => isNully(s) ? s : utf8Encoder.encode(s);
+const stringToBytes = s => isValue(s) ? utf8Encoder.encode(s) : s;
 
 /**
  * Convert a Uint8Array to a string by
@@ -212,7 +212,7 @@ const stringToBytes = s => isNully(s) ? s : utf8Encoder.encode(s);
  * @param {Uint8Array} b The bytes to convert.
  * @return {string} The resulting string.
  */
-const bytesToString = b => isNully(b) ? b : utf8Decoder.decode(b);
+const bytesToString = b => isValue(b) ? utf8Decoder.decode(b) : b;
 
 /**
  * Convert an sjcl bitArray to a string by
@@ -325,7 +325,7 @@ const requireString = function(val, label) {
   @param {String} label The value label.
   @return {String} The supplied value or an empty string.
 */
-const maybeString = (val, label) => isNully(val) ? '' : requireString(val, label);
+const maybeString = (val, label) => isValue(val) ? requireString(val, label) : '';
 
 /**
   Check that supplied value is a Uint8Array or a string.
@@ -554,7 +554,7 @@ const Macaroon = class Macaroon {
    */
   get caveats() {
     return this._caveats.map(cav => {
-      return cav._vidBits ? {
+      return isValue(cav._vidBits) ? {
         identifier: bitsToBytes(cav._identifierBits),
         location: cav._locationStr,
         vid: bitsToBytes(cav._vidBits),
@@ -722,7 +722,14 @@ const Macaroon = class Macaroon {
     }
   }
 
-  exportAsJSONObject() {
+
+  /**
+  Exports the macaroon to a JSON-serializable object.
+  The version used depends on what version the
+  macaroon was created with or imported from.
+  @return {Object}
+  */
+  exportJSON() {
     switch (this._version) {
       case 1:
         return this._exportAsJSONObjectV1();
@@ -789,18 +796,18 @@ const Macaroon = class Macaroon {
   }
 
   /**
-   * Serializes the macaroon using the v1 binary format.
+   * Exports the macaroon using the v1 binary format.
    * @return {Uint8Array} Serialized macaroon
    */
-  _serializeBinaryV1() {
-    throw new Error('V1 binary serialization not supported');
+  _exportBinaryV1() {
+    throw new Error('V1 binary export not supported');
   };
 
   /**
-   * Serializes the macaroon using the v2 binary format.
-   * @return {Uint8Array} Serialized macaroon
-   */
-  _serializeBinaryV2() {
+   Exports the macaroon using the v2 binary format.
+   @return {Uint8Array} Serialized macaroon
+  */
+  _exportBinaryV2() {
     const buf = new ByteBuffer(200);
     buf.appendByte(2);
     if (this._locationStr) {
@@ -823,12 +830,18 @@ const Macaroon = class Macaroon {
     return buf.bytes;
   };
 
-  serializeBinary() {
+  /**
+  Exports the macaroon using binary format.
+  The version used depends on what version the
+  macaroon was created with or imported from.
+  @return {Uint8Array}
+  */
+  exportBinary() {
     switch (this._version) {
       case 1:
-        return this._serializeBinaryV1();
+        return this._exportBinaryV1();
       case 2:
-        return this._serializeBinaryV2();
+        return this._exportBinaryV2();
       default:
         throw new Error(`unexpected macaroon version ${this._version}`);
     }
@@ -836,25 +849,86 @@ const Macaroon = class Macaroon {
 };
 
 /**
-  Returns macaroon instances based on the JSON-decoded object
-  in the argument. If this is passed an array, it will decode
-  all the macaroons in the array.
-  @param {Object|Array} obj A deserialized JSON macaroon or an array of them.
-  @return {Macaroon}
+  Returns a macaroon instance based on the object passed in.
+  If obj is a string, it is assumed to be a base64-encoded
+  macaroon in binary or JSON format.
+  If obj is a Uint8Array, it is assumed to be a macaroon in
+  binary format, as produced by the exportBinary method.
+  Otherwise obj is assumed to be a object decoded from JSON,
+  and will be unmarshaled as such.
+  @param obj A deserialized JSON macaroon.
+  @return {Macaroon | Macaroon[]}
 */
-const importFromJSONObject = function(obj) {
+const importMacaroon = function(obj) {
+  if (typeof obj === 'string') {
+    obj = base64ToBytes(obj);
+  }
+  if (obj instanceof Uint8Array) {
+    const buf = new ByteReader(obj);
+    const m = importBinary(buf);
+    if (buf.length !== 0) {
+      throw new TypeError('extra data found at end of serialized macaroon');
+    }
+    return m;
+  }
   if (Array.isArray(obj)) {
-    // TODO this probably should not allow multiple levels of array.
-    return obj.map(val => importFromJSONObject(val));
+    throw new TypeError('cannot import an array of macaroons as a single macaroon');
   }
-  if (obj.signature) {
-    // Looks like a V1 macaroon.
-    return importFromJSONObjectV1(obj);
-  }
-  return importFromJSONObjectV2(obj);
+  return importJSON(obj);
 };
 
-const importFromJSONObjectV1 = function(obj) {
+/**
+  Returns an array of macaroon instances based on the object passed in.
+  If obj is a string, it is assumed to be a set of base64-encoded
+  macaroons in binary or JSON format.
+  If obj is a Uint8Array, it is assumed to be set of macaroons in
+  binary format, as produced by the exportBinary method.
+  If obj is an array, it is assumed to be an array of macaroon
+  objects decoded from JSON.
+  Otherwise obj is assumed to be a macaroon object decoded from JSON.
+
+  This function accepts a strict superset of the formats accepted
+  by importMacaroons. When decoding a single macaroon,
+  it will return an array with one macaroon element.
+
+  @param obj A deserialized JSON macaroon or macaroons.
+  @return {Macaroon[]}
+*/
+const importMacaroons = function(obj) {
+  if (typeof obj === 'string') {
+    obj = base64ToBytes(obj);
+  }
+  if (obj instanceof Uint8Array) {
+    if (obj.length === 0) {
+      throw new TypeError('empty macaroon data');
+    }
+    const buf = new ByteReader(obj);
+    const ms = [];
+    do {
+      ms.push(importBinary(buf));
+    } while (buf.length > 0);
+    return ms;
+  }
+  if (Array.isArray(obj)) {
+    return obj.map(val => importJSON(val));
+  }
+  return [importJSON(obj)];
+};
+
+/**
+  Returns a macaroon instance imported from a JSON-decoded object.
+  @param {object} obj The JSON to import from.
+  @return {Macaroon}
+ */
+const importJSON = function(obj) {
+  if (isValue(obj.signature)) {
+    // Looks like a V1 macaroon.
+    return importJSONV1(obj);
+  }
+  return importJSONV2(obj);
+};
+
+const importJSONV1 = function(obj) {
   const caveats = obj.caveats && obj.caveats.map(jsonCaveat => {
     const caveat = {
       identifierBytes: stringToBytes(requireString(jsonCaveat.cid, 'Caveat id')),
@@ -875,11 +949,11 @@ const importFromJSONObjectV1 = function(obj) {
 };
 
 /**
- * Deserializes V2 JSON macaroon encoding.
+ * Imports V2 JSON macaroon encoding.
  * @param {Object|Array} obj A serialized JSON macaroon
  * @return {Macaroon}
 */
-const importFromJSONObjectV2 = function(obj) {
+const importJSONV2 = function(obj) {
   if (obj.v !== 2) {
     throw new Error(`Unsupported macaroon version ${obj.v}`);
   }
@@ -927,12 +1001,11 @@ const v2JSONField = function(obj, key, required) {
 };
 
 /**
- * Deserialize a macaroon from the v2 binary format
- * @param {Uint8Array} bytes The serialized macaroon.
+ * Import a macaroon from the v2 binary format
+ * @param {ByteReader} buf A buffer holding the serialized macaroon.
  * @return {Macaroon}
  */
-const deserializeBinaryV2 = function(bytes) {
-  const buf = new ByteReader(bytes);
+const importBinaryV2 = function(buf) {
   const version = buf.readByte();
   if (version !== 2) {
     throw new Error(`Only version 2 is supported, found version ${version}`);
@@ -967,16 +1040,16 @@ const isASCIIHex = function(charCode) {
 };
 
 /**
- * Deserialize a macaroon from binary format (currently only supports V2 format).
+ * Import a macaroon from binary format (currently only supports V2 format).
  * @param {Uint8Array} bytes The serialized macaroon.
  */
-const deserializeBinary = function(bytes) {
-  if (bytes.length === 0) {
+const importBinary = function(buf) {
+  if (buf.length === 0) {
     throw new Error('Empty macaroon data');
   }
-  const version = bytes[0];
+  const version = buf.peekByte();
   if (version === 2) {
-    return deserializeBinaryV2(bytes);
+    return importBinaryV2(buf);
   }
   if (isASCIIHex(version)) {
     // It's a hex digit - version 1 binary format.
@@ -1074,8 +1147,8 @@ const dischargeMacaroon = function (macaroon, getDischarge, onOk, onError) {
 module.exports = {
   newMacaroon,
   dischargeMacaroon,
-  importFromJSONObject,
-  deserializeBinary,
+  importMacaroons,
+  importMacaroon,
   bytesToBase64: bytesToBase64,
   base64ToBytes: base64ToBytes,
 };
