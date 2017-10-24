@@ -45,7 +45,7 @@ const ByteBuffer = class ByteBuffer {
   /**
    * Create a new ByteBuffer. A ByteBuffer holds
    * a Uint8Array that it grows when written to.
-   * @param {int} The initial capacity of the buffer.
+   * @param {int} capacity The initial capacity of the buffer.
    */
   constructor(capacity) {
     this._buf = new Uint8Array(capacity);
@@ -53,7 +53,7 @@ const ByteBuffer = class ByteBuffer {
   }
   /**
    * Append several bytes to the buffer.
-   * @param {Uint8Array} The bytes to append.
+   * @param {Uint8Array} bytes The bytes to append.
    */
   appendBytes(bytes) {
     this._grow(this._length + bytes.length);
@@ -62,7 +62,7 @@ const ByteBuffer = class ByteBuffer {
   }
   /**
    * Append a single byte to the buffer.
-   * @param {int} The byte to append
+   * @param {int} byte The byte to append
    */
   appendByte(byte) {
     this._grow(this._length + 1);
@@ -71,14 +71,14 @@ const ByteBuffer = class ByteBuffer {
   }
   /**
    * Append a variable length integer to the buffer.
-   * @param {int} The number to append.
+   * @param {int} x The number to append.
    */
   appendUvarint(x) {
     if (x > maxInt || x < 0) {
       throw new RangeError(`varint ${x} out of range`);
     }
     this._grow(this._length + maxVarintLen32);
-    var i = this._length;
+    let i = this._length;
     while(x >= 0x80) {
       this._buf[i++] = (x & 0xff) | 0x80;
       x >>>= 7;
@@ -96,7 +96,7 @@ const ByteBuffer = class ByteBuffer {
   }
   /**
    * Grow the internal buffer so that it's at least as but as minCap.
-   * @param {int} The minimum new capacity.
+   * @param {int} minCap The minimum new capacity.
    */
   _grow(minCap) {
     if (minCap <= this._capacity) {
@@ -116,7 +116,7 @@ const maxVarintLen32 = 5;
 const ByteReader = class ByteReader {
   /**
    * Create a new ByteReader that reads from the given buffer.
-   * @param {Uint8Array} The buffer to read from.
+   * @param {Uint8Array} bytes The buffer to read from.
    */
   constructor(bytes) {
     this._buf = bytes;
@@ -175,9 +175,9 @@ const ByteReader = class ByteReader {
    */
   readUvarint() {
     const length = this._buf.length;
-    var x = 0;
-    var shift = 0;
-    for(var i = this._index; i < length; i++) {
+    let x = 0;
+    let shift = 0;
+    for(let i = this._index; i < length; i++) {
       const b = this._buf[i];
       if (b < 0x80) {
         const n = i - this._index;
@@ -288,7 +288,7 @@ const hexToBytes = function(hex) {
 /**
  * Report whether the argument encodes a valid utf-8 string.
  * @param {Uint8Array} bytes The bytes to check.
- * @return {bool} True if the bytes are valid utf-8.
+ * @return {boolean} True if the bytes are valid utf-8.
  */
 const isValidUTF8 = function(bytes) {
   try {
@@ -383,7 +383,7 @@ const appendFieldV2 = function(buf, fieldType, data) {
  * Read an optionally-present macaroon V2 field from the buffer.
  * If the field is not present, returns null.
  * @param {ByteReader} buf The buffer to read from.
- * @param {int} expectFieldType The expected field type.
+ * @param {int} maybeFieldType The expected field type.
  * @return {Uint8Array | null} The contents of the field, or null if not present.
  */
 const readFieldV2Optional = function(buf, maybeFieldType) {
@@ -409,8 +409,8 @@ const setJSONFieldV2 = function(obj, key, valBytes) {
 
 /**
   Generate a hash using the supplied data.
-  @param {bitArray} key
-  @param {bitArray} data
+  @param {bitArray} keyBits
+  @param {bitArray} dataBits
   @return {bitArray} The keyed hash of the supplied data as a sjcl bitArray.
 */
 const keyedHash = function(keyBits, dataBits) {
@@ -479,7 +479,7 @@ const decrypt = function(keyBits, ciphertextBits) {
   const ciphertextBytes = bitsToBytes(ciphertextBits);
   const nonceBytes = ciphertextBytes.slice(0, NONCELEN);
   const dataBytes = ciphertextBytes.slice(NONCELEN);
-  var textBytes = nacl.secretbox.open(dataBytes, nonceBytes, keyBytes);
+  let textBytes = nacl.secretbox.open(dataBytes, nonceBytes, keyBytes);
   if (textBytes === false) {
     throw new Error('decryption failed');
   }
@@ -615,7 +615,7 @@ const Macaroon = class Macaroon {
 
   /**
     Adds a caveat that will be verified by the target service.
-    @param {String | Uint8Array} caveatId
+    @param {String | Uint8Array} caveatIdBytes
   */
   addFirstPartyCaveat(caveatIdBytes) {
     const identifierBits = bytesToBits(requireBytes(caveatIdBytes, 'Condition'));
@@ -966,7 +966,7 @@ const importJSONV2 = function(obj) {
   if (obj.c) {
     if (!Array.isArray(obj.c)) {
       throw new Error('caveats field does not hold an array');
-    };
+    }
     params.caveats = obj.c.map(caveat => {
       return {
         identifierBytes: v2JSONField(caveat, 'i', true),
@@ -983,8 +983,8 @@ const importJSONV2 = function(obj) {
  * format.
  * @param {Object} obj A deserialized JSON object.
  * @param {string} key The key name.
- * @param {bool} required Whether the key is required to exist.
- * @return {Uint8Array) The value of the key (or null if not present).
+ * @param {boolean} required Whether the key is required to exist.
+ * @return {Uint8Array} The value of the key (or null if not present).
  */
 const v2JSONField = function(obj, key, required) {
   if (obj.hasOwnProperty(key)) {
@@ -1041,7 +1041,7 @@ const isASCIIHex = function(charCode) {
 
 /**
  * Import a macaroon from binary format (currently only supports V2 format).
- * @param {Uint8Array} bytes The serialized macaroon.
+ * @param {Uint8Array} buf The serialized macaroon.
  */
 const importBinary = function(buf) {
   if (buf.length === 0) {
