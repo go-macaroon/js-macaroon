@@ -7,7 +7,7 @@ const testUtils = require('./test-utils');
 
 test('should discharge a macaroon with no caveats without calling getDischarge', t => {
   const macaroon = m.newMacaroon({
-    rootKey: testUtils.bytesToString('key'),
+    rootKey: 'key',
     identifier: 'some id',
     location: 'a location'
   });
@@ -28,7 +28,7 @@ test('should discharge a macaroon with no caveats without calling getDischarge',
 });
 
 test('should discharge many discharges correctly', t => {
-  const rootKey = testUtils.bytesToString('secret');
+  const rootKey = 'secret';
   const queued = [];
   const m0 = m.newMacaroon({
     rootKey,
@@ -45,7 +45,7 @@ test('should discharge many discharges correctly', t => {
       }
       const cid = 'id' + id;
       m.addThirdPartyCaveat(
-        testUtils.bytesToString('root key ' + cid), cid, 'somewhere');
+        'root key ' + cid, cid, 'somewhere');
       id++;
       totalRequired--;
     }
@@ -54,7 +54,7 @@ test('should discharge many discharges correctly', t => {
   const getDischarge = function (loc, thirdPartyLoc, cond, onOK, onErr) {
     t.equal(loc, 'location0');
     const macaroon = m.newMacaroon({
-      rootKey: testUtils.bytesToString('root key ' + cond),
+      rootKey: 'root key ' + testUtils.bytesToString(cond),
       identifier: cond});
     addCaveats(macaroon);
     queued.push(() => {

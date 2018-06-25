@@ -125,13 +125,13 @@ test('should allow adding first party caveats', t => {
 });
 
 test('should allow adding a third party caveat', t => {
-  const rootKey = testUtils.bytesToString('secret');
+  const rootKey = 'secret';
   const macaroon = m.newMacaroon({
     rootKey,
     identifier: 'some id',
     location: 'a location',
   });
-  const dischargeRootKey = testUtils.bytesToString('shared root key');
+  const dischargeRootKey = 'shared root key';
   const thirdPartyCaveatId = '3rd party caveat';
   macaroon.addThirdPartyCaveat(
     dischargeRootKey, thirdPartyCaveatId, 'remote.com');
