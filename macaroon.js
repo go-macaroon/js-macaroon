@@ -3,9 +3,7 @@
 const sjcl = require('sjcl');
 const nacl = require('tweetnacl');
 const naclutil = require('tweetnacl-util');
-const textEncoding = require('text-encoding');
-const utf8Encoder = new textEncoding.TextEncoder('utf-8');
-const utf8Decoder = new textEncoding.TextDecoder('utf-8', {fatal: true});
+const UTF8 = require('utf-8');
 
 const NONCELEN = 24;
 
@@ -203,7 +201,7 @@ const isValue = x => x !== undefined && x !== null;
  * @param {string} s The string to convert.
  * @return {Uint8Array} The resulting bytes.
  */
-const stringToBytes = s => isValue(s) ? utf8Encoder.encode(s) : s;
+const stringToBytes = s => isValue(s) ? new Uint8Array(UTF8.setBytesFromString(s)) : s;
 
 /**
  * Convert a Uint8Array to a string by
@@ -212,7 +210,7 @@ const stringToBytes = s => isValue(s) ? utf8Encoder.encode(s) : s;
  * @param {Uint8Array} b The bytes to convert.
  * @return {string} The resulting string.
  */
-const bytesToString = b => isValue(b) ? utf8Decoder.decode(b) : b;
+const bytesToString = b => isValue(b) ? UTF8.getStringFromBytes(b) : b;
 
 /**
  * Convert an sjcl bitArray to a string by

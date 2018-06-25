@@ -2,12 +2,10 @@
 
 const m = require('../macaroon');
 
-const textEncoding = require('text-encoding');
-const utf8Encoder = new textEncoding.TextEncoder('utf-8');
-const utf8Decoder = new textEncoding.TextDecoder('utf-8', {fatal: true});
+const UTF8 = require('utf-8');
 
-const bytesToString = b => utf8Decoder.decode(b);
-const stringToBytes = s => utf8Encoder.encode(s);
+const bytesToString = b => UTF8.getStringFromBytes(b);
+const stringToBytes = s => new Uint8Array(UTF8.setBytesFromString(s));
 
 const bytesToHex = ua => {
   if (!(ua instanceof Uint8Array)) {
@@ -85,4 +83,3 @@ module.exports = {
   bytes,
   makeMacaroons,
 };
-
