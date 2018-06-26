@@ -3,9 +3,19 @@
 const sjcl = require('sjcl');
 const nacl = require('tweetnacl');
 const naclutil = require('tweetnacl-util');
-const textEncoding = require('text-encoding');
-const utf8Encoder = new textEncoding.TextEncoder('utf-8');
-const utf8Decoder = new textEncoding.TextDecoder('utf-8', {fatal: true});
+
+let TextEncoder, TextDecoder;
+if (typeof window === 'undefined') {
+  const util = require('util');
+  TextEncoder = util.TextEncoder;
+  TextDecoder = util.TextDecoder;
+} else {
+  TextEncoder = window.TextEncoder;
+  TextDecoder = window.TextDecoder;
+}
+
+const utf8Encoder = new TextEncoder();
+const utf8Decoder = new TextDecoder('utf-8', {fatal : true});
 
 const NONCELEN = 24;
 
