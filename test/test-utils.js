@@ -2,9 +2,12 @@
 
 const m = require('../macaroon');
 
-const textEncoding = require('text-encoding');
-const utf8Encoder = new textEncoding.TextEncoder('utf-8');
-const utf8Decoder = new textEncoding.TextDecoder('utf-8', {fatal: true});
+const util = require('util');
+const TextEncoder = util.TextEncoder;
+const TextDecoder = util.TextDecoder;
+
+const utf8Encoder = new TextEncoder();
+const utf8Decoder = new TextDecoder('utf-8', {fatal : true});
 
 const bytesToString = b => utf8Decoder.decode(b);
 const stringToBytes = s => utf8Encoder.encode(s);
@@ -85,4 +88,3 @@ module.exports = {
   bytes,
   makeMacaroons,
 };
-
