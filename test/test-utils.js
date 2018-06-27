@@ -3,11 +3,9 @@
 const m = require('../macaroon');
 
 const util = require('util');
-const TextEncoder = util.TextEncoder;
-const TextDecoder = util.TextDecoder;
 
-const utf8Encoder = new TextEncoder();
-const utf8Decoder = new TextDecoder('utf-8', {fatal : true});
+const utf8Encoder = new util.TextEncoder();
+const utf8Decoder = new util.TextDecoder('utf-8', {fatal : true});
 
 const bytesToString = b => utf8Decoder.decode(b);
 const stringToBytes = s => utf8Encoder.encode(s);

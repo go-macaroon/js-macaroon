@@ -6,6 +6,7 @@ const naclutil = require('tweetnacl-util');
 
 let TextEncoder, TextDecoder;
 if (typeof window === 'undefined') {
+  // No window if it's node.js.
   const util = require('util');
   TextEncoder = util.TextEncoder;
   TextDecoder = util.TextDecoder;
