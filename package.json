@@ -4,7 +4,8 @@
     "url": "http://github.com/go-macaroon/js-macaroon/issues"
   },
   "contributors": [
-    "Jeff Pihach (https://fromanegg.com)"
+    "Jeff Pihach (https://fromanegg.com)",
+    "Evan Schwartz <evan@ripple.com>"
   ],
   "dependencies": {
     "sjcl": "^1.0.6",
