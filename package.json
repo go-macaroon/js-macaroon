@@ -36,5 +36,5 @@
     "test": "node test/test.js",
     "doc": "jsdoc2md macaroon.js > README.md"
   },
-  "version": "3.0.1"
+  "version": "3.0.2"
 }
