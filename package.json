@@ -34,6 +34,8 @@
   "scripts": {
     "lint": "eslint .",
     "test": "node test/test.js",
+    "check": "npm run lint && npm t",
+    "clean": "rm -rf node_modules",
     "doc": "jsdoc2md macaroon.js > README.md"
   },
   "version": "3.0.2"
