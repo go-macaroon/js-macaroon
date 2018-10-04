@@ -1,3 +1,15 @@
+/**
+ A JavaScript implementation of
+ [macaroons](http://theory.stanford.edu/~ataly/Papers/macaroons.pdf)
+ compatible with the [Go](http://github.com/go-macaroon/macaroon),
+ [Python, and C ](https://github.com/rescrv/libmacaroons)
+ implementations. Including functionality to interact with
+ third party caveat dischargers implemented by the [Go macaroon
+ bakery](http://github.com/go-macaroon-bakery/macaroon-bakery).
+ It supports both version 1 and 2 macaroons in JSON and binary formats.
+ @module macaroon
+ */
+
 'use strict';
 
 const sjcl = require('sjcl');
@@ -31,7 +43,7 @@ const maxInt = Math.pow(2, 32)-1;
 /**
  * Return a form of x suitable for including in a error message.
  * @param {any} x The object to be converted to string form.
- * @return {string} The converted object.
+ * @returns {string} - The converted object.
  */
 const toString = function(x) {
   if (x instanceof Array) {
@@ -100,7 +112,7 @@ const ByteBuffer = class ByteBuffer {
   /**
    * Return everything that has been appended to the buffer.
    * Note that the returned array is shared with the internal buffer.
-   * @return {Uint8Array} The buffer.
+   * @returns {Uint8Array} - The buffer.
    */
   get bytes() {
     return this._buf.subarray(0, this._length);
@@ -136,7 +148,7 @@ const ByteReader = class ByteReader {
   /**
    * Read a byte from the buffer. If there are no bytes left in the
    * buffer, throws a RangeError exception.
-   * @return {int} The read byte.
+   * @returns {int} - The read byte.
    */
   readByte() {
     if (this.length <= 0) {
@@ -148,7 +160,7 @@ const ByteReader = class ByteReader {
    * Inspect the next byte without consuming it.
    * If there are no bytes left in the
    * buffer, throws a RangeError exception.
-   * @return {int} The peeked byte.
+   * @returns {int} - The peeked byte.
    */
   peekByte() {
     if (this.length <= 0) {
@@ -172,7 +184,7 @@ const ByteReader = class ByteReader {
   }
   /**
    * Return the size of the buffer.
-   * @return {int} The number of bytes left to read in the buffer.
+   * @returns {int} - The number of bytes left to read in the buffer.
    */
   get length() {
     return this._buf.length - this._index;
@@ -182,7 +194,7 @@ const ByteReader = class ByteReader {
    * If there are not enough bytes left in the buffer
    * or the encoded integer is too big, throws a
    * RangeError exception.
-   * @return {int} The number that's been read.
+   * @returns {int} - The number that's been read.
    */
   readUvarint() {
     const length = this._buf.length;
@@ -212,7 +224,7 @@ const isValue = x => x !== undefined && x !== null;
  * Convert a string to a Uint8Array by utf-8
  * encoding it.
  * @param {string} s The string to convert.
- * @return {Uint8Array} The resulting bytes.
+ * @returns {Uint8Array}
  */
 const stringToBytes = s => isValue(s) ? utf8Encoder.encode(s) : s;
 
@@ -221,7 +233,7 @@ const stringToBytes = s => isValue(s) ? utf8Encoder.encode(s) : s;
  * utf-8 decoding it. Throws an exception if
  * the bytes do not represent well-formed utf-8.
  * @param {Uint8Array} b The bytes to convert.
- * @return {string} The resulting string.
+ * @returns {string}
  */
 const bytesToString = b => isValue(b) ? utf8Decoder.decode(b) : b;
 
@@ -230,7 +242,7 @@ const bytesToString = b => isValue(b) ? utf8Decoder.decode(b) : b;
  * utf-8 decoding it. Throws an exception if
  * the bytes do not represent well-formed utf-8.
  * @param {bitArray} s The bytes to convert.
- * @return {string} The resulting string.
+ * @returns {string}
  */
 const bitsToString = s => sjcl.codec.utf8String.fromBits(s);
 
@@ -238,7 +250,8 @@ const bitsToString = s => sjcl.codec.utf8String.fromBits(s);
  * Convert a base64 string to a Uint8Array by decoding it.
  * It copes with unpadded and URL-safe base64 encodings.
  * @param {string} s The base64 string to decode.
- * @return {Uint8Array} The decoded bytes.
+ * @returns {Uint8Array} - The decoded bytes.
+ * @alias module:macaroon
  */
 const base64ToBytes = function(s) {
   s = s.replace(/-/g, '+').replace(/_/g, '/');
@@ -252,7 +265,8 @@ const base64ToBytes = function(s) {
 /** Convert a Uint8Array to a base64-encoded string
  * using URL-safe, unpadded encoding.
  * @param {Uint8Array} bytes The bytes to encode.
- * @return {string} The base64-encoded result.
+ * @returns {string} - The base64-encoded result.
+ * @alias module:macaroon
  */
 const bytesToBase64 = function(bytes) {
   return naclutil.encodeBase64(bytes)
@@ -264,7 +278,7 @@ const bytesToBase64 = function(bytes) {
 /**
   Converts a Uint8Array to a bitArray for use by nacl.
   @param {Uint8Array} arr The array to convert.
-  @return {bitArray} The converted array.
+  @returns {bitArray} - The converted array.
 */
 const bytesToBits = function(arr) {
   // See https://github.com/bitwiseshiftleft/sjcl/issues/344 for why
@@ -275,7 +289,7 @@ const bytesToBits = function(arr) {
 /**
   Converts a bitArray to a Uint8Array.
   @param {bitArray} arr The array to convert.
-  @return {Uint8Array} The converted array.
+  @returns {Uint8Array} - The converted array.
 */
 const bitsToBytes = function(arr) {
   // See https://github.com/bitwiseshiftleft/sjcl/issues/344 for why
@@ -286,7 +300,7 @@ const bitsToBytes = function(arr) {
 /**
   Converts a hex to Uint8Array
   @param {String} hex The hex value to convert.
-  @return {Uint8Array} The resulting array.
+  @returns {Uint8Array}
 */
 const hexToBytes = function(hex) {
   const arr = new Uint8Array(Math.ceil(hex.length / 2));
@@ -299,7 +313,7 @@ const hexToBytes = function(hex) {
 /**
  * Report whether the argument encodes a valid utf-8 string.
  * @param {Uint8Array} bytes The bytes to check.
- * @return {boolean} True if the bytes are valid utf-8.
+ * @returns {boolean} - True if the bytes are valid utf-8.
  */
 const isValidUTF8 = function(bytes) {
   try {
@@ -318,7 +332,7 @@ const isValidUTF8 = function(bytes) {
   error including the provided label if not.
   @param {String} val The value to assert as a string
   @param {String} label The value label.
-  @return {String} The supplied value.
+  @returns {String} - The supplied value.
 */
 const requireString = function(val, label) {
   if (typeof val !== 'string') {
@@ -334,7 +348,7 @@ const requireString = function(val, label) {
 
   @param {(String | null)} val The value to assert as a string
   @param {String} label The value label.
-  @return {String} The supplied value or an empty string.
+  @returns {String} - The supplied value or an empty string.
 */
 const maybeString = (val, label) => isValue(val) ? requireString(val, label) : '';
 
@@ -344,7 +358,7 @@ const maybeString = (val, label) => isValue(val) ? requireString(val, label) : '
   including the provided label if not.
   @param {(Uint8Array | string)} val The value to assert as a Uint8Array
   @param {string} label The value label.
-  @return {Uint8Array} The supplied value, utf-8-encoded if it was a string.
+  @returns {Uint8Array} - The supplied value, utf-8-encoded if it was a string.
 */
 const requireBytes = function(val, label) {
   if (val instanceof Uint8Array) {
@@ -363,7 +377,7 @@ const emptyBytes = new Uint8Array();
  * field does not have the expected type, throws an exception.
  * @param {ByteReader} buf The buffer to read from.
  * @param {int} expectFieldType The required field type.
- * @return {Uint8Array} The contents of the field.
+ * @returns {Uint8Array} - The contents of the field.
  */
 const readFieldV2 = function(buf, expectFieldType) {
   const fieldType = buf.readByte();
@@ -395,7 +409,7 @@ const appendFieldV2 = function(buf, fieldType, data) {
  * If the field is not present, returns null.
  * @param {ByteReader} buf The buffer to read from.
  * @param {int} maybeFieldType The expected field type.
- * @return {Uint8Array | null} The contents of the field, or null if not present.
+ * @returns {Uint8Array | null} - The contents of the field, or null if not present.
  */
 const readFieldV2Optional = function(buf, maybeFieldType) {
   if (buf.peekByte() !== maybeFieldType) {
@@ -422,7 +436,7 @@ const setJSONFieldV2 = function(obj, key, valBytes) {
   Generate a hash using the supplied data.
   @param {bitArray} keyBits
   @param {bitArray} dataBits
-  @return {bitArray} The keyed hash of the supplied data as a sjcl bitArray.
+  @returns {bitArray} - The keyed hash of the supplied data as a sjcl bitArray.
 */
 const keyedHash = function(keyBits, dataBits) {
   const hash = new sjcl.misc.hmac(keyBits, sjcl.hash.sha256);
@@ -435,7 +449,7 @@ const keyedHash = function(keyBits, dataBits) {
   @param {bitArray} keyBits
   @param {bitArray} d1Bits
   @param {bitArray} d2Bits
-  @return {bitArray} The keyed hash of d1 and d2 as a sjcl bitArray.
+  @returns {bitArray} - The keyed hash of d1 and d2 as a sjcl bitArray.
 */
 const keyedHash2 = function(keyBits, d1Bits, d2Bits) {
   const h1Bits = keyedHash(keyBits, d1Bits);
@@ -448,7 +462,7 @@ const keyGeneratorBits = bytesToBits(stringToBytes('macaroons-key-generator'));
 /**
   Generate a fixed length key for use as a nacl secretbox key.
   @param {bitArray} keyBits The key to convert.
-  @return {bitArray} sjcl bitArray.
+  @returns {bitArray}
 */
 const makeKey = function(keyBits) {
   return keyedHash(keyGeneratorBits, keyBits);
@@ -456,7 +470,7 @@ const makeKey = function(keyBits) {
 
 /**
   Generate a random nonce as Uint8Array.
-  @return {Uint8Array} nonce.
+  @returns {Uint8Array}
 */
 const newNonce = function() {
   return nacl.randomBytes(NONCELEN);
@@ -466,7 +480,7 @@ const newNonce = function() {
   Encrypt the given plaintext with the given key.
   @param {bitArray} keyBits encryption key.
   @param {bitArray} textBits plaintext.
-  @return {bitArray} encrypted text.
+  @returns {bitArray} - encrypted text.
 */
 const encrypt = function(keyBits, textBits) {
   const keyBytes = bitsToBytes(keyBits);
@@ -483,7 +497,7 @@ const encrypt = function(keyBits, textBits) {
   Decrypts the given cyphertext.
   @param {bitArray} keyBits decryption key.
   @param {bitArray} ciphertextBits encrypted text.
-  @return {bitArray} decrypted text.
+  @returns {bitArray} - decrypted text.
 */
 const decrypt = function(keyBits, ciphertextBits) {
   const keyBytes = bitsToBytes(keyBits);
@@ -504,7 +518,7 @@ const zeroKeyBits = bytesToBits(stringToBytes('\0'.repeat(32)));
   keys already match then it will return the rootSig.
   @param {bitArray} rootSigBits
   @param {bitArray} dischargeSigBits
-  @return {bitArray} The bound macaroon signature.
+  @returns {bitArray} - The bound macaroon signature.
 */
 const bindForRequest = function(rootSigBits, dischargeSigBits) {
   if (sjcl.bitArray.equal(rootSigBits, dischargeSigBits)) {
@@ -561,7 +575,8 @@ const Macaroon = class Macaroon {
    * as an object with an identifier field (Uint8Array)
    * and (for third party caveats) a location field (string),
    * and verification id (Uint8Array).
-   * @return {Array} The macaroon's caveats.
+   * @returns {Array} - The macaroon's caveats.
+   * @alias module:macaroon
    */
   get caveats() {
     return this._caveats.map(cav => {
@@ -577,7 +592,8 @@ const Macaroon = class Macaroon {
 
   /**
    * Return the location of the macaroon.
-   * @return {string} The macaroon's location.
+   * @returns {string} - The macaroon's location.
+   * @alias module:macaroon
    */
   get location() {
     return this._locationStr;
@@ -585,7 +601,8 @@ const Macaroon = class Macaroon {
 
   /**
    * Return the macaroon's identifier.
-   * @return {Uint8Array} The macaroon's identifier.
+   * @returns {Uint8Array} - The macaroon's identifier.
+   * @alias module:macaroon
    */
   get identifier() {
     return bitsToBytes(this._identifierBits);
@@ -593,7 +610,8 @@ const Macaroon = class Macaroon {
 
   /**
    * Return the signature of the macaroon.
-   * @return {string} The macaroon's signature.
+   * @returns {Uint8Array} - The macaroon's signature.
+   * @alias module:macaroon
    */
   get signature() {
     return bitsToBytes(this._signatureBits);
@@ -607,6 +625,7 @@ const Macaroon = class Macaroon {
     @param {Uint8Array} rootKeyBytes
     @param {(Uint8Array | string)} caveatIdBytes
     @param {String} [locationStr]
+    @alias module:macaroon
   */
   addThirdPartyCaveat(rootKeyBytes, caveatIdBytes, locationStr) {
     const cav = {
@@ -627,6 +646,7 @@ const Macaroon = class Macaroon {
   /**
     Adds a caveat that will be verified by the target service.
     @param {String | Uint8Array} caveatIdBytes
+    @alias module:macaroon
   */
   addFirstPartyCaveat(caveatIdBytes) {
     const identifierBits = bytesToBits(requireBytes(caveatIdBytes, 'Condition'));
@@ -637,10 +657,11 @@ const Macaroon = class Macaroon {
   }
 
   /**
-    Sets the macaroon signature to one bound to the given root signature.
+    Binds the macaroon signature to the given root signature.
     This must be called on discharge macaroons with the primary
     macaroon's signature before sending the macaroons in a request.
     @param {Uint8Array} rootSig
+    @alias module:macaroon
   */
   bindToRoot(rootSig) {
     const rootSigBits = bytesToBits(requireBytes(rootSig, 'Primary macaroon signature'));
@@ -650,7 +671,8 @@ const Macaroon = class Macaroon {
   /**
     Returns a copy of the macaroon. Any caveats added to the returned macaroon
     will not effect the original.
-    @return {Macaroon} The cloned macaroon.
+    @returns {Macaroon} - The cloned macaroon.
+    @alias module:macaroon
   */
   clone() {
     const m = new Macaroon(null);
@@ -670,6 +692,7 @@ const Macaroon = class Macaroon {
       is passed the condition to check (a string) and should return an error string if the condition
       is not met, or null if satisfied.
     @param {Array} discharges
+    @alias module:macaroon
   */
   verify(rootKeyBytes, check, discharges = []) {
     const rootKeyBits = makeKey(bytesToBits(requireBytes(rootKeyBytes, 'Root key')));
@@ -738,7 +761,8 @@ const Macaroon = class Macaroon {
   Exports the macaroon to a JSON-serializable object.
   The version used depends on what version the
   macaroon was created with or imported from.
-  @return {Object}
+  @returns {Object}
+  @alias module:macaroon
   */
   exportJSON() {
     switch (this._version) {
@@ -753,7 +777,7 @@ const Macaroon = class Macaroon {
 
   /**
     Returns a JSON compatible object representation of this version 1 macaroon.
-    @return {Object} JSON compatible representation of this macaroon.
+    @returns {Object} - JSON compatible representation of this macaroon.
   */
   _exportAsJSONObjectV1() {
     const obj = {
@@ -781,7 +805,7 @@ const Macaroon = class Macaroon {
 
   /**
     Returns the V2 JSON serialization of this macaroon.
-    @return {Object} JSON compatible representation of this macaroon.
+    @returns {Object} - JSON compatible representation of this macaroon.
   */
   _exportAsJSONObjectV2() {
     const obj = {
@@ -808,7 +832,7 @@ const Macaroon = class Macaroon {
 
   /**
    * Exports the macaroon using the v1 binary format.
-   * @return {Uint8Array} Serialized macaroon
+   * @returns {Uint8Array} - Serialized macaroon
    */
   _exportBinaryV1() {
     throw new Error('V1 binary export not supported');
@@ -816,7 +840,7 @@ const Macaroon = class Macaroon {
 
   /**
    Exports the macaroon using the v2 binary format.
-   @return {Uint8Array} Serialized macaroon
+   @returns {Uint8Array} - Serialized macaroon
   */
   _exportBinaryV2() {
     const buf = new ByteBuffer(200);
@@ -843,9 +867,10 @@ const Macaroon = class Macaroon {
 
   /**
   Exports the macaroon using binary format.
-  The version used depends on what version the
+  The version will be the same as the version that the
   macaroon was created with or imported from.
-  @return {Uint8Array}
+  @returns {Uint8Array}
+  @alias module:macaroon
   */
   exportBinary() {
     switch (this._version) {
@@ -868,7 +893,8 @@ const Macaroon = class Macaroon {
   Otherwise obj is assumed to be a object decoded from JSON,
   and will be unmarshaled as such.
   @param obj A deserialized JSON macaroon.
-  @return {Macaroon | Macaroon[]}
+  @returns {Macaroon | Macaroon[]}
+  @alias module:macaroon
 */
 const importMacaroon = function(obj) {
   if (typeof obj === 'string') {
@@ -903,7 +929,8 @@ const importMacaroon = function(obj) {
   it will return an array with one macaroon element.
 
   @param obj A deserialized JSON macaroon or macaroons.
-  @return {Macaroon[]}
+  @returns {Macaroon[]}
+  @alias module:macaroon
 */
 const importMacaroons = function(obj) {
   if (typeof obj === 'string') {
@@ -929,7 +956,7 @@ const importMacaroons = function(obj) {
 /**
   Returns a macaroon instance imported from a JSON-decoded object.
   @param {object} obj The JSON to import from.
-  @return {Macaroon}
+  @returns {Macaroon}
  */
 const importJSON = function(obj) {
   if (isValue(obj.signature)) {
@@ -962,7 +989,7 @@ const importJSONV1 = function(obj) {
 /**
  * Imports V2 JSON macaroon encoding.
  * @param {Object|Array} obj A serialized JSON macaroon
- * @return {Macaroon}
+ * @returns {Macaroon}
 */
 const importJSONV2 = function(obj) {
   if (obj.v !== 2) {
@@ -995,7 +1022,7 @@ const importJSONV2 = function(obj) {
  * @param {Object} obj A deserialized JSON object.
  * @param {string} key The key name.
  * @param {boolean} required Whether the key is required to exist.
- * @return {Uint8Array} The value of the key (or null if not present).
+ * @returns {Uint8Array} - The value of the key (or null if not present).
  */
 const v2JSONField = function(obj, key, required) {
   if (obj.hasOwnProperty(key)) {
@@ -1014,7 +1041,7 @@ const v2JSONField = function(obj, key, required) {
 /**
  * Import a macaroon from the v2 binary format
  * @param {ByteReader} buf A buffer holding the serialized macaroon.
- * @return {Macaroon}
+ * @returns {Macaroon}
  */
 const importBinaryV2 = function(buf) {
   const version = buf.readByte();
@@ -1071,14 +1098,15 @@ const importBinary = function(buf) {
 
 /**
   Create a new Macaroon with the given root key, identifier, location
-  and signature.
-  @param {Object} The necessary values to generate a macaroon.
+  and signature and return it.
+  @param {Object} - The necessary values to generate a macaroon.
     It contains the following fields:
       identifier: {String | Uint8Array}
       location:   {String} (optional)
       rootKey:    {String | Uint8Array}
       version: {int} (optional; defaults to 2).
-  @return {Macaroon} The new macaroon
+  @returns {Macaroon}
+  @alias module:macaroon
 */
 const newMacaroon = function({identifier, location, rootKey, version} = {}) {
   const identifierBytes = requireBytes(identifier, 'Macaroon identifier');
@@ -1097,17 +1125,18 @@ const newMacaroon = function({identifier, location, rootKey, version} = {}) {
   Gathers discharge macaroons for all third party caveats in the supplied
   macaroon (and any subsequent caveats required by those) calling getDischarge
   to acquire each discharge macaroon.
-  @param {Macaroon} macaroon
-  @param {Function} getDischarge is called with 5 arguments.
+  @param {Macaroon} macaroon - The macaroon to discharge.
+  @param {Function} getDischarge - Called with 5 arguments.
     macaroon.location {String}
     caveat.location {String}
     caveat.id {String}
     success {Function}
     failure {Function}
-  @param {Function} onOk Called with an array argument holding the macaroon
+  @param {Function} onOk - Called with an array argument holding the macaroon
     as the first element followed by all the discharge macaroons. All the
     discharge macaroons will be bound to the primary macaroon.
-  @param {Function} onError Called if an error occurs during discharge.
+  @param {Function} onError - Called if an error occurs during discharge.
+  @alias module:macaroon
 */
 const dischargeMacaroon = function (macaroon, getDischarge, onOk, onError) {
   const primarySig = macaroon.signature;

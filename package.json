@@ -14,6 +14,7 @@
   "description": "Macaroons: cookies with contextual caveats for decentralized authorization in the cloud.",
   "devDependencies": {
     "eslint": "^3.19.0",
+    "jsdoc-to-markdown": "^4.0.1",
     "rewire": "^2.5.2",
     "tape": "^4.6.3"
   },
@@ -32,7 +33,8 @@
   },
   "scripts": {
     "lint": "eslint .",
-    "test": "node test/test.js"
+    "test": "node test/test.js",
+    "doc": "jsdoc2md macaroon.js > README.md"
   },
   "version": "3.0.1"
 }
