@@ -1116,8 +1116,8 @@ const newMacaroon = function({identifier, location, rootKey, version} = {}) {
     identifierBytes: identifierBytes,
     locationStr: maybeString(location, 'Macaroon location'),
     signatureBytes: bitsToBytes(keyedHash(
-        makeKey(bytesToBits(rootKeyBytes)),
-        bytesToBits(identifierBytes))),
+      makeKey(bytesToBits(rootKeyBytes)),
+      bytesToBits(identifierBytes))),
   });
 };
 
