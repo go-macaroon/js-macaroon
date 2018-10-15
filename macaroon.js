@@ -17,7 +17,7 @@ const nacl = require('tweetnacl');
 const naclutil = require('tweetnacl-util');
 
 let TextEncoder, TextDecoder;
-if (window && window.TextEncoder) {
+if (typeof window !== 'undefined' && window && window.TextEncoder) {
   TextEncoder = window.TextEncoder;
   TextDecoder = window.TextDecoder;
 } else {
@@ -1116,8 +1116,8 @@ const newMacaroon = function({identifier, location, rootKey, version} = {}) {
     identifierBytes: identifierBytes,
     locationStr: maybeString(location, 'Macaroon location'),
     signatureBytes: bitsToBytes(keyedHash(
-        makeKey(bytesToBits(rootKeyBytes)),
-        bytesToBits(identifierBytes))),
+      makeKey(bytesToBits(rootKeyBytes)),
+      bytesToBits(identifierBytes))),
   });
 };
 
