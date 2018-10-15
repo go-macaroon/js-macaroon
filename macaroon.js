@@ -17,14 +17,14 @@ const nacl = require('tweetnacl');
 const naclutil = require('tweetnacl-util');
 
 let TextEncoder, TextDecoder;
-if (typeof window === 'undefined') {
-  // No window if it's node.js.
+if (typeof window !== 'undefined' && window && window.TextEncoder) {
+  TextEncoder = window.TextEncoder;
+  TextDecoder = window.TextDecoder;
+} else {
+  // No window.TextEncoder if it's node.js.
   const util = require('util');
   TextEncoder = util.TextEncoder;
   TextDecoder = util.TextDecoder;
-} else {
-  TextEncoder = window.TextEncoder;
-  TextDecoder = window.TextDecoder;
 }
 
 const utf8Encoder = new TextEncoder();
