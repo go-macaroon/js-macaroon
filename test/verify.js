@@ -450,3 +450,12 @@ test('should verify external third party macaroons correctly', t => {
   ms[0].verify(externalRootKey, () => {}, ms.slice(1));
   t.end();
 });
+
+test('should handle incorrect root key correctly', t => {
+    const ms = m.importMacaroons(externalMacaroons);
+    t.throws(() => {
+        ms[0].verify('wrong-key', () => {}, ms.slice(1));
+    }, /decryption failed/, 'Should fail with decryption error');
+    t.end();
+});
+
