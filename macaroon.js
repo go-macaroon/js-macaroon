@@ -505,7 +505,7 @@ const decrypt = function(keyBits, ciphertextBits) {
   const nonceBytes = ciphertextBytes.slice(0, NONCELEN);
   const dataBytes = ciphertextBytes.slice(NONCELEN);
   let textBytes = nacl.secretbox.open(dataBytes, nonceBytes, keyBytes);
-  if (textBytes === false || textBytes === null) {
+  if (!textBytes) {
     throw new Error('decryption failed');
   }
   return bytesToBits(textBytes);
