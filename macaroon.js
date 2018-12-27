@@ -992,7 +992,7 @@ const importJSONV1 = function(obj) {
  * @returns {Macaroon}
 */
 const importJSONV2 = function(obj) {
-  if (obj.v !== 2) {
+  if (obj.v && obj.v !== 2) {
     throw new Error(`Unsupported macaroon version ${obj.v}`);
   }
   const params = {

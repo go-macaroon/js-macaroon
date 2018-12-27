@@ -61,8 +61,15 @@ test('should deserialize json format with one caveat', t => {
   t.end();
 });
 
+test('should not deserialize json format with invalid version', t => {
+  t.throws(() => {
+    m.importMacaroon({'v':3,'l':'http://example.org/','i':'keyid','c':[{'i':'account = 3735928559'}],'s64':'9UgH9txu34i_D3MGs4IlYqNiUz2_czm6YXZdpL0lnYc'});
+  }, /Unsupported macaroon version/, "Should not deserialize with invalid version");
+t.end();
+});
+
 test('should deserialize json format with two caveats', t => {
-  const macaroon = m.importMacaroon({'v':2,'l':'http://example.org/','i':'keyid','c':[{'i':'account = 3735928559'},{'i':'user = alice'}],'s64':'S-lnzR6gxrJrr2pKlO6bBbFYhtoLqF6MQqk8jQ4SXvw'});
+  const macaroon = m.importMacaroon({'l':'http://example.org/','i':'keyid','c':[{'i':'account = 3735928559'},{'i':'user = alice'}],'s64':'S-lnzR6gxrJrr2pKlO6bBbFYhtoLqF6MQqk8jQ4SXvw'});
   t.equal(macaroon.location, 'http://example.org/');
   t.equal(testUtils.bytesToString(macaroon.identifier), 'keyid');
   const caveats = macaroon.caveats;
