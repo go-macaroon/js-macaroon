@@ -992,7 +992,9 @@ const importJSONV1 = function(obj) {
  * @returns {Macaroon}
 */
 const importJSONV2 = function(obj) {
-  if (obj.v && obj.v !== 2) {
+    // The Go macaroon library omits the version, so we'll assume that
+    // it is 2 in that case. See https://github.com/go-macaroon/macaroon/issues/35
+  if (obj.v !== 2 && obj.v !== undefined) {
     throw new Error(`Unsupported macaroon version ${obj.v}`);
   }
   const params = {
