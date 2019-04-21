@@ -33,6 +33,15 @@ test('ByteBuffer append bytes', t => {
   t.end();
 });
 
+test('ByteBuffer append 256 bytes, verify growth not exponential', t => {
+  const buf = new ByteBuffer(0);
+  for(var i = 0; i < 256; i++) {
+    buf.appendByte(i);
+  }
+  t.equal(buf._buf.length, 365);
+  t.end();
+});
+
 test('ByteBuffer appendUvarint', t => {
   varintTests.forEach(test => {
     const buf = new ByteBuffer(0);
