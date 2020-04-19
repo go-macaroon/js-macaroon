@@ -1,42 +1,54 @@
 {
-  "author": "Roger Peppe (rogpeppe@gmail.com)",
-  "bugs": {
-    "url": "http://github.com/go-macaroon/js-macaroon/issues"
-  },
-  "contributors": [
-    "Jeff Pihach (https://fromanegg.com)"
-  ],
-  "dependencies": {
-    "sjcl": "^1.0.6",
-    "tweetnacl": "^1.0.0",
-    "tweetnacl-util": "^0.15.0"
-  },
+  "name": "macaroon",
+  "version": "3.1.0",
   "description": "Macaroons: cookies with contextual caveats for decentralized authorization in the cloud.",
-  "devDependencies": {
-    "eslint": "^5.7.0",
-    "jsdoc-to-markdown": "^4.0.1",
-    "rewire": "^4.0.1",
-    "tape": "^4.6.3"
-  },
-  "homepage": "http://github.com/go-macaroon/js-macaroon",
   "keywords": [
     "authorization",
     "cookie",
     "macaroon"
   ],
-  "license": "BSD-3-Clause",
-  "main": "macaroon.js",
-  "name": "macaroon",
+  "homepage": "http://github.com/go-macaroon/js-macaroon",
+  "bugs": {
+    "url": "http://github.com/go-macaroon/js-macaroon/issues"
+  },
   "repository": {
     "type": "git",
     "url": "http://github.com/go-macaroon/js-macaroon.git"
   },
+  "license": "BSD-3-Clause",
+  "author": "Roger Peppe (rogpeppe@gmail.com)",
+  "contributors": [
+    "Jeff Pihach (https://fromanegg.com)"
+  ],
+  "main": "macaroon.js",
+  "types": "macaroon.d.ts",
   "scripts": {
-    "lint": "eslint .",
-    "test": "node test/test.js",
+    "build": "tsc",
     "check": "npm run lint && npm t",
     "clean": "rm -rf node_modules",
-    "doc": "jsdoc2md macaroon.js > README.md"
+    "doc": "jsdoc2md --files ./src/macaroon.ts --configure ./jsdoc2md.json > README.md",
+    "lint": "eslint .",
+    "test": "node test/test.js"
   },
-  "version": "3.1.0"
+  "dependencies": {
+    "sjcl": "^1.0.6",
+    "tweetnacl": "^1.0.0",
+    "tweetnacl-util": "^0.15.0"
+  },
+  "devDependencies": {
+    "@babel/cli": "^7.8.4",
+    "@babel/core": "^7.9.0",
+    "@babel/plugin-proposal-class-properties": "^7.8.3",
+    "@babel/preset-env": "^7.9.5",
+    "@babel/preset-typescript": "^7.9.0",
+    "@types/node": "^13.13.0",
+    "@types/sjcl": "^1.0.29",
+    "eslint": "^6.8.0",
+    "eslint-plugin-harmony": "^3.0.1",
+    "jsdoc-babel": "^0.5.0",
+    "jsdoc-to-markdown": "^5.0.3",
+    "rewire": "^4.0.1",
+    "tape": "^4.6.3",
+    "typescript": "^3.8.3"
+  }
 }
