@@ -21,3 +21,7 @@ rules:
   semi: [2, "always"]
   space-before-blocks: 2
   strict: [2, "global"]
+overrides:
+  extends: plugin:harmony/ts-recommended
+  files:
+    - *.ts
