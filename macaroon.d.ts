@@ -49,33 +49,25 @@ declare class Macaroon {
      * as an object with an identifier field (Uint8Array)
      * and (for third party caveats) a location field (string),
      * and verification id (Uint8Array).
-     * @returns {Array} - The macaroon's caveats.
+     * @returns The macaroon's caveats.
      * @alias module:macaroon
      */
-    get caveats(): ({
-        identifier: Uint8Array;
-        location: string | undefined;
-        vid: Uint8Array;
-    } | {
-        identifier: Uint8Array;
-        location?: undefined;
-        vid?: undefined;
-    })[];
+    get caveats(): Caveat[];
     /**
      * Return the location of the macaroon.
-     * @returns {string} - The macaroon's location.
+     * @returns The macaroon's location.
      * @alias module:macaroon
      */
     get location(): string;
     /**
      * Return the macaroon's identifier.
-     * @returns {Uint8Array} - The macaroon's identifier.
+     * @returns The macaroon's identifier.
      * @alias module:macaroon
      */
     get identifier(): Uint8Array;
     /**
      * Return the signature of the macaroon.
-     * @returns {Uint8Array} - The macaroon's signature.
+     * @returns The macaroon's signature.
      * @alias module:macaroon
      */
     get signature(): Uint8Array;
@@ -102,7 +94,7 @@ declare class Macaroon {
     /**
       Returns a copy of the macaroon. Any caveats added to the returned macaroon
       will not effect the original.
-      @returns {Macaroon} - The cloned macaroon.
+      @returns The cloned macaroon.
       @alias module:macaroon
     */
     clone(): Macaroon;
@@ -218,9 +210,9 @@ export declare const newMacaroon: ({ identifier, location, rootKey, version }: M
 */
 export declare const dischargeMacaroon: (macaroon: Macaroon, getDischarge: Macaroon.getDischarge, onOk: (macaroons: Macaroon[]) => void, onError: (err: Error) => void) => void;
 export declare type Caveat = {
-    vidBytes?: Uint8Array | null;
-    identifierBytes: Uint8Array | null;
-    locationStr: string;
+    identifier: Uint8Array;
+    void?: Uint8Array;
+    location?: string;
 };
 export declare namespace Macaroon {
     type Params = {
@@ -229,6 +221,11 @@ export declare namespace Macaroon {
         signatureBytes: Uint8Array;
         version: number;
         caveats?: Caveat[];
+    };
+    type Caveat = {
+        vidBytes?: Uint8Array | null;
+        identifierBytes: Uint8Array | null;
+        locationStr: string;
     };
     type Options = {
         identifier: string | Uint8Array;

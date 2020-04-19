@@ -231,7 +231,6 @@ const stringToBytes = (s) => isValue(s) ? utf8Encoder.encode(s) : s;
  * utf-8 decoding it. Throws an exception if
  * the bytes do not represent well-formed utf-8.
  * @param b The bytes to convert.
- * @returns
  */
 const bytesToString = (b) => isValue(b) ? utf8Decoder.decode(b) : b;
 /**
@@ -271,7 +270,7 @@ exports.bytesToBase64 = function (bytes) {
 /**
   Converts a Uint8Array to a bitArray for use by nacl.
   @param arr The array to convert.
-  @returns {bitArray} - The converted array.
+  @returns The converted array.
 */
 const bytesToBits = function (arr) {
     // See https://github.com/bitwiseshiftleft/sjcl/issues/344 for why
@@ -447,7 +446,6 @@ const makeKey = function (keyBits) {
 };
 /**
   Generate a random nonce as Uint8Array.
-  @returns {Uint8Array}
 */
 const newNonce = function () {
     return tweetnacl_1.default.randomBytes(NONCELEN);
@@ -546,7 +544,7 @@ class Macaroon {
      * as an object with an identifier field (Uint8Array)
      * and (for third party caveats) a location field (string),
      * and verification id (Uint8Array).
-     * @returns {Array} - The macaroon's caveats.
+     * @returns The macaroon's caveats.
      * @alias module:macaroon
      */
     get caveats() {
@@ -562,7 +560,7 @@ class Macaroon {
     }
     /**
      * Return the location of the macaroon.
-     * @returns {string} - The macaroon's location.
+     * @returns The macaroon's location.
      * @alias module:macaroon
      */
     get location() {
@@ -570,7 +568,7 @@ class Macaroon {
     }
     /**
      * Return the macaroon's identifier.
-     * @returns {Uint8Array} - The macaroon's identifier.
+     * @returns The macaroon's identifier.
      * @alias module:macaroon
      */
     get identifier() {
@@ -578,7 +576,7 @@ class Macaroon {
     }
     /**
      * Return the signature of the macaroon.
-     * @returns {Uint8Array} - The macaroon's signature.
+     * @returns The macaroon's signature.
      * @alias module:macaroon
      */
     get signature() {
@@ -624,7 +622,7 @@ class Macaroon {
     /**
       Returns a copy of the macaroon. Any caveats added to the returned macaroon
       will not effect the original.
-      @returns {Macaroon} - The cloned macaroon.
+      @returns The cloned macaroon.
       @alias module:macaroon
     */
     clone() {

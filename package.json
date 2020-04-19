@@ -26,7 +26,7 @@
     "build": "tsc",
     "check": "npm run lint && npm t",
     "clean": "rm -rf node_modules",
-    "doc": "jsdoc2md macaroon.js > README.md",
+    "doc": "jsdoc2md --files ./src/macaroon.ts --configure ./jsdoc2md.json > README.md",
     "lint": "eslint .",
     "test": "node test/test.js"
   },
@@ -36,11 +36,17 @@
     "tweetnacl-util": "^0.15.0"
   },
   "devDependencies": {
+    "@babel/cli": "^7.8.4",
+    "@babel/core": "^7.9.0",
+    "@babel/plugin-proposal-class-properties": "^7.8.3",
+    "@babel/preset-env": "^7.9.5",
+    "@babel/preset-typescript": "^7.9.0",
     "@types/node": "^13.13.0",
     "@types/sjcl": "^1.0.29",
-    "eslint": "^5.7.0",
+    "eslint": "^6.8.0",
     "eslint-plugin-harmony": "^3.0.1",
-    "jsdoc-to-markdown": "^4.0.1",
+    "jsdoc-babel": "^0.5.0",
+    "jsdoc-to-markdown": "^5.0.3",
     "rewire": "^4.0.1",
     "tape": "^4.6.3",
     "typescript": "^3.8.3"

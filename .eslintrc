@@ -22,6 +22,6 @@ rules:
   space-before-blocks: 2
   strict: [2, "global"]
 overrides:
-  extends: plugin:harmony/ts-recommended
-  files:
-    - *.ts
+  - extends: plugin:harmony/ts-recommended
+    files:
+      - "*.ts"

@@ -236,7 +236,6 @@ const stringToBytes = (s: string): Uint8Array => isValue(s) ? utf8Encoder.encode
  * utf-8 decoding it. Throws an exception if
  * the bytes do not represent well-formed utf-8.
  * @param b The bytes to convert.
- * @returns
  */
 const bytesToString = (b?: Uint8Array | null) => isValue(b) ? utf8Decoder.decode(b) : b;
 
@@ -280,7 +279,7 @@ export const bytesToBase64 = function (bytes: Uint8Array) {
 /**
   Converts a Uint8Array to a bitArray for use by nacl.
   @param arr The array to convert.
-  @returns {bitArray} - The converted array.
+  @returns The converted array.
 */
 const bytesToBits = function (arr: Uint8Array) {
   // See https://github.com/bitwiseshiftleft/sjcl/issues/344 for why
@@ -470,7 +469,6 @@ const makeKey = function (keyBits: BitArray) {
 
 /**
   Generate a random nonce as Uint8Array.
-  @returns {Uint8Array}
 */
 const newNonce = function () {
   return nacl.randomBytes(NONCELEN);
@@ -585,10 +583,10 @@ class Macaroon {
    * as an object with an identifier field (Uint8Array)
    * and (for third party caveats) a location field (string),
    * and verification id (Uint8Array).
-   * @returns {Array} - The macaroon's caveats.
+   * @returns The macaroon's caveats.
    * @alias module:macaroon
    */
-  get caveats() {
+  get caveats(): Caveat[] {
     return this._caveats.map(cav => {
       return isValue(cav._vidBits) ? {
         identifier: bitsToBytes(cav._identifierBits),
@@ -602,7 +600,7 @@ class Macaroon {
 
   /**
    * Return the location of the macaroon.
-   * @returns {string} - The macaroon's location.
+   * @returns The macaroon's location.
    * @alias module:macaroon
    */
   get location() {
@@ -611,7 +609,7 @@ class Macaroon {
 
   /**
    * Return the macaroon's identifier.
-   * @returns {Uint8Array} - The macaroon's identifier.
+   * @returns The macaroon's identifier.
    * @alias module:macaroon
    */
   get identifier() {
@@ -620,7 +618,7 @@ class Macaroon {
 
   /**
    * Return the signature of the macaroon.
-   * @returns {Uint8Array} - The macaroon's signature.
+   * @returns The macaroon's signature.
    * @alias module:macaroon
    */
   get signature() {
@@ -676,7 +674,7 @@ class Macaroon {
   /**
     Returns a copy of the macaroon. Any caveats added to the returned macaroon
     will not effect the original.
-    @returns {Macaroon} - The cloned macaroon.
+    @returns The cloned macaroon.
     @alias module:macaroon
   */
   clone() {
@@ -977,7 +975,7 @@ function isJSONV1(obj: any): obj is MacaroonJSONV1 {
 
 const importJSONV1 = function (obj: MacaroonJSONV1) {
   const caveats = obj.caveats && obj.caveats.map(jsonCaveat => {
-    const caveat: Caveat = {
+    const caveat: Macaroon.Caveat = {
       identifierBytes: stringToBytes(requireString(jsonCaveat.cid, 'Caveat id')),
       locationStr: maybeString(jsonCaveat.cl, 'Caveat location'),
     };
@@ -1204,10 +1202,11 @@ export const dischargeMacaroon = function (
 };
 
 export type Caveat = {
-  vidBytes?: Uint8Array | null,
-  identifierBytes: Uint8Array | null,
-  locationStr: string,
+  identifier: Uint8Array,
+  void?: Uint8Array,
+  location?: string,
 }
+
 export namespace Macaroon {
   export type Params = {
     identifierBytes: Uint8Array | null,
@@ -1215,6 +1214,11 @@ export namespace Macaroon {
     signatureBytes: Uint8Array,
     version: number,
     caveats?: Caveat[],
+  }
+  export type Caveat = {
+    vidBytes?: Uint8Array | null,
+    identifierBytes: Uint8Array | null,
+    locationStr: string,
   }
   export type Options = {
     identifier: string | Uint8Array,
