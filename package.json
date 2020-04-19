@@ -7,16 +7,19 @@
     "Jeff Pihach (https://fromanegg.com)"
   ],
   "dependencies": {
+    "@types/sjcl": "^1.0.29",
     "sjcl": "^1.0.6",
     "tweetnacl": "^1.0.0",
     "tweetnacl-util": "^0.15.0"
   },
   "description": "Macaroons: cookies with contextual caveats for decentralized authorization in the cloud.",
   "devDependencies": {
-    "eslint": "^5.7.0",
-    "jsdoc-to-markdown": "^4.0.1",
+    "eslint": "^6.8.0",
+    "eslint-plugin-harmony": "^3.0.1",
+    "jsdoc-to-markdown": "^5.0.3",
     "rewire": "^4.0.1",
-    "tape": "^4.6.3"
+    "tape": "^4.6.3",
+    "typescript": "^3.8.3"
   },
   "homepage": "http://github.com/go-macaroon/js-macaroon",
   "keywords": [
@@ -27,6 +30,7 @@
   "license": "BSD-3-Clause",
   "main": "macaroon.js",
   "name": "macaroon",
+  "types": "macaroon.d.ts",
   "repository": {
     "type": "git",
     "url": "http://github.com/go-macaroon/js-macaroon.git"
