@@ -14,11 +14,12 @@
   },
   "description": "Macaroons: cookies with contextual caveats for decentralized authorization in the cloud.",
   "devDependencies": {
-    "eslint": "^5.7.0",
+    "eslint": "^6.8.0",
     "eslint-plugin-harmony": "^3.0.1",
     "jsdoc-to-markdown": "^4.0.1",
     "rewire": "^4.0.1",
-    "tape": "^4.6.3"
+    "tape": "^4.6.3",
+    "typescript": "^3.8.3"
   },
   "homepage": "http://github.com/go-macaroon/js-macaroon",
   "keywords": [
