@@ -20,6 +20,11 @@
   "contributors": [
     "Jeff Pihach (https://fromanegg.com)"
   ],
+  "files": [
+    "macaroon.js",
+    "macaroon.js.map",
+    "macaroon.d.ts"
+  ],
   "main": "macaroon.js",
   "types": "macaroon.d.ts",
   "scripts": {
