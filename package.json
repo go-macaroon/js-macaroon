@@ -1,5 +1,5 @@
 {
-  "name": "macaroon",
+  "name": "@unional/macaroon",
   "version": "3.1.0",
   "description": "Macaroons: cookies with contextual caveats for decentralized authorization in the cloud.",
   "keywords": [
@@ -7,13 +7,13 @@
     "cookie",
     "macaroon"
   ],
-  "homepage": "http://github.com/go-macaroon/js-macaroon",
+  "homepage": "http://github.com/unional/js-macaroon",
   "bugs": {
-    "url": "http://github.com/go-macaroon/js-macaroon/issues"
+    "url": "http://github.com/unional/js-macaroon/issues"
   },
   "repository": {
     "type": "git",
-    "url": "http://github.com/go-macaroon/js-macaroon.git"
+    "url": "http://github.com/unional/js-macaroon.git"
   },
   "license": "BSD-3-Clause",
   "author": "Roger Peppe (rogpeppe@gmail.com)",
@@ -24,9 +24,9 @@
   "types": "macaroon.d.ts",
   "scripts": {
     "build": "tsc",
-    "check": "npm run lint && npm t",
+    "check": "yarn lint && yarn test",
     "clean": "rm -rf node_modules",
-    "doc": "jsdoc2md --files ./src/macaroon.ts --configure ./jsdoc2md.json > README.md",
+    "doc": "jsdoc2md --files ./src/macaroon.ts --configure ./jsdoc2md.json > API.md",
     "lint": "eslint .",
     "test": "node test/test.js"
   },

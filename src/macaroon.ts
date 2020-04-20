@@ -10,16 +10,18 @@
  @module macaroon
  */
 
-import sjcl, { BitArray } from 'sjcl'
-import nacl from 'tweetnacl'
-import naclutil from 'tweetnacl-util'
+import sjcl, { BitArray } from 'sjcl';
+import nacl from 'tweetnacl';
+import naclutil from 'tweetnacl-util';
 
 let TextEncoder, TextDecoder;
 if (typeof window !== 'undefined' && window && window.TextEncoder) {
   TextEncoder = window.TextEncoder;
   TextDecoder = window.TextDecoder;
-} else {
+}
+else {
   // No window.TextEncoder if it's node.js.
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
   const util = require('util');
   TextEncoder = util.TextEncoder;
   TextDecoder = util.TextDecoder;
@@ -46,12 +48,15 @@ const maxInt = Math.pow(2, 32) - 1;
 const toString = function (x: any) {
   if (x instanceof Array) {
     // Probably bitArray, try to convert it.
-    try { x = bitsToBytes(x); } catch (e) { }
+    try { x = bitsToBytes(x); }
+    // eslint-disable-next-line no-empty
+    catch (e) { }
   }
   if (x instanceof Uint8Array) {
     if (isValidUTF8(x)) {
       x = bytesToString(x);
-    } else {
+    }
+    else {
       return `b64"${bytesToBase64(x)}"`;
     }
   }
@@ -134,7 +139,7 @@ class ByteBuffer {
     newContent.set(this._buf.subarray(0, this._length));
     this._buf = newContent;
   }
-};
+}
 
 const maxVarintLen32 = 5;
 
@@ -220,7 +225,7 @@ class ByteReader {
     this._index = length;
     throw new RangeError('Buffer too small decoding varint');
   }
-};
+}
 
 const isValue = (x: any) => x !== undefined && x !== null;
 
@@ -318,7 +323,8 @@ const hexToBytes = function (hex: string) {
 const isValidUTF8 = function (bytes: Uint8Array) {
   try {
     bytesToString(bytes);
-  } catch (e) {
+  }
+  catch (e) {
     // While https://encoding.spec.whatwg.org states that the
     // exception should be a TypeError, we'll be defensive here
     // and just treat any exception as signifying invalid utf-8.
@@ -427,7 +433,8 @@ const readFieldV2Optional = function (buf: ByteReader, maybeFieldType: number): 
 const setJSONFieldV2 = function (obj: Record<string, any>, key: string, valBytes: Uint8Array) {
   if (isValidUTF8(valBytes)) {
     obj[key] = bytesToString(valBytes);
-  } else {
+  }
+  else {
     obj[key + '64'] = bytesToBase64(valBytes);
   }
 };
@@ -502,7 +509,7 @@ const decrypt = function (keyBits: BitArray, ciphertextBits: BitArray) {
   const ciphertextBytes = bitsToBytes(ciphertextBits);
   const nonceBytes = ciphertextBytes.slice(0, NONCELEN);
   const dataBytes = ciphertextBytes.slice(NONCELEN);
-  let textBytes = nacl.secretbox.open(dataBytes, nonceBytes, keyBytes);
+  const textBytes = nacl.secretbox.open(dataBytes, nonceBytes, keyBytes);
   if (!textBytes) {
     throw new Error('decryption failed');
   }
@@ -552,26 +559,26 @@ class Macaroon {
       // clone uses null parameters.
       return;
     }
-    let { version, identifierBytes, locationStr, caveats, signatureBytes } = params;
+    const { version, identifierBytes, locationStr, caveats, signatureBytes } = params;
     if (version !== 1 && version !== 2) {
       throw new Error(`Unexpected version ${version}`);
     }
     this._version = version;
     this._locationStr = locationStr;
-    identifierBytes = requireBytes(identifierBytes, 'Identifier');
-    if (version === 1 && !isValidUTF8(identifierBytes)) {
+    const idBytes = requireBytes(identifierBytes, 'Identifier');
+    if (version === 1 && !isValidUTF8(idBytes)) {
       throw new Error('Version 1 macaroon identifier must be well-formed UTF-8');
     }
-    this._identifierBits = identifierBytes && bytesToBits(identifierBytes);
+    this._identifierBits = idBytes && bytesToBits(idBytes);
     this._signatureBits = signatureBytes && bytesToBits(requireBytes(signatureBytes, 'Signature'));
     this._caveats = caveats ? caveats.map(cav => {
-      const identifierBytes = requireBytes(cav.identifierBytes, 'Caveat identifier');
-      if (version === 1 && !isValidUTF8(identifierBytes)) {
+      const idBytes = requireBytes(cav.identifierBytes, 'Caveat identifier');
+      if (version === 1 && !isValidUTF8(idBytes)) {
         throw new Error('Version 1 caveat identifier must be well-formed UTF-8');
       }
       return {
         _locationStr: maybeString(cav.locationStr),
-        _identifierBits: bytesToBits(identifierBytes),
+        _identifierBits: bytesToBits(idBytes),
         _vidBits: cav.vidBytes && bytesToBits(requireBytes(cav.vidBytes, 'Verification ID')),
       };
     }) : [];
@@ -588,13 +595,13 @@ class Macaroon {
    */
   get caveats(): Caveat[] {
     return this._caveats.map(cav => {
-      return isValue(cav._vidBits) ? {
-        identifier: bitsToBytes(cav._identifierBits),
-        location: cav._locationStr,
-        vid: bitsToBytes(cav._vidBits!),
-      } : {
+      return isValue(cav._vidBits) ?
+        {
           identifier: bitsToBytes(cav._identifierBits),
-        };
+          location: cav._locationStr,
+          vid: bitsToBytes(cav._vidBits!),
+        } :
+        { identifier: bitsToBytes(cav._identifierBits) };
     });
   }
 
@@ -698,7 +705,7 @@ class Macaroon {
   */
   verify(rootKeyBytes: Uint8Array, check: (cond: string) => any, discharges: Macaroon[] = []) {
     const rootKeyBits = makeKey(bytesToBits(requireBytes(rootKeyBytes, 'Root key')));
-    const used = discharges.map(d => 0);
+    const used = discharges.map(() => 0);
 
     this._verify(this._signatureBits, rootKeyBits, check, discharges, used);
 
@@ -743,7 +750,8 @@ class Macaroon {
             `cannot find discharge macaroon for caveat ${toString(caveat._identifierBits)}`);
         }
         caveatSigBits = keyedHash2(caveatSigBits, caveat._vidBits, caveat._identifierBits);
-      } else {
+      }
+      else {
         const cond = bitsToString(caveat._identifierBits);
         const err = check(cond);
         if (err) {
@@ -839,7 +847,7 @@ class Macaroon {
    */
   _exportBinaryV1() {
     throw new Error('V1 binary export not supported');
-  };
+  }
 
   /**
    Exports the macaroon using the v2 binary format.
@@ -866,7 +874,7 @@ class Macaroon {
     appendFieldV2(buf, FIELD_EOS);
     appendFieldV2(buf, FIELD_SIGNATURE, bitsToBytes(this._signatureBits));
     return buf.bytes;
-  };
+  }
 
   /**
   Exports the macaroon using binary format.
@@ -884,8 +892,8 @@ class Macaroon {
       default:
         throw new Error(`unexpected macaroon version ${this._version}`);
     }
-  };
-};
+  }
+}
 
 /**
   Returns a macaroon instance based on the object passed in.
@@ -970,7 +978,7 @@ const importJSON = function (obj: MacaroonJSONV1 | MacaroonJSONV2) {
 };
 
 function isJSONV1(obj: any): obj is MacaroonJSONV1 {
-  return isValue(obj.signature)
+  return isValue(obj.signature);
 }
 
 const importJSONV1 = function (obj: MacaroonJSONV1) {
@@ -1035,18 +1043,18 @@ const importJSONV2 = function (obj: MacaroonJSONV2) {
 function v2JSONField(obj: Record<string, any>, key: string, required?: false): Uint8Array | null
 function v2JSONField(obj: Record<string, any>, key: string, required: true): Uint8Array
 function v2JSONField(obj: Record<string, any>, key: string, required?: boolean): Uint8Array | null {
-  if (obj.hasOwnProperty(key)) {
+  if (Object.hasOwnProperty.call(obj, key)) {
     return stringToBytes(obj[key]);
   }
   const key64 = key + '64';
-  if (obj.hasOwnProperty(key64)) {
+  if (Object.hasOwnProperty.call(obj, key64)) {
     return base64ToBytes(obj[key64]);
   }
   if (required) {
     throw new Error('Expected key: ' + key);
   }
   return null;
-};
+}
 
 /**
  * Import a macaroon from the v2 binary format
@@ -1057,9 +1065,9 @@ const importBinaryV2 = function (buf: ByteReader) {
   if (version !== 2) {
     throw new Error(`Only version 2 is supported, found version ${version}`);
   }
-  const locationStr = bytesToString(readFieldV2Optional(buf, FIELD_LOCATION))
-  const identifierBytes = readFieldV2(buf, FIELD_IDENTIFIER)
-  const caveats = []
+  const locationStr = bytesToString(readFieldV2Optional(buf, FIELD_LOCATION));
+  const identifierBytes = readFieldV2(buf, FIELD_IDENTIFIER);
+  const caveats = [];
   readFieldV2(buf, FIELD_EOS);
   for (; ;) {
     if (readFieldV2Optional(buf, FIELD_EOS)) {
@@ -1069,7 +1077,7 @@ const importBinaryV2 = function (buf: ByteReader) {
       locationStr: bytesToString(readFieldV2Optional(buf, FIELD_LOCATION)),
       identifierBytes: readFieldV2(buf, FIELD_IDENTIFIER),
       vidBytes: readFieldV2Optional(buf, FIELD_VID),
-    }
+    };
     readFieldV2(buf, FIELD_EOS);
     caveats!.push(cav);
   }
@@ -1257,7 +1265,7 @@ export namespace MacaroonJSONV1 {
 export type MacaroonJSONV2 = {
   v: number,
   s?: string,
-  s64?: string
+  s64?: string,
   i?: string,
   i64?: string,
   l?: string,
