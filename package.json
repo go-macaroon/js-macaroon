@@ -49,8 +49,7 @@
     "jsdoc-to-markdown": "^4.0.1",
     "rewire": "^5.0.0",
     "tape": "^4.13.2",
-    "typescript": "^3.8.3",
-    "semantic-release": "^17.0.6"
+    "typescript": "^3.8.3"
   },
   "engines": {
     "node": ">=8"
