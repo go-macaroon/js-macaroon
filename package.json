@@ -1,6 +1,6 @@
 {
   "name": "@unional/macaroon",
-  "version": "3.1.0",
+  "version": "0.0.0-development",
   "description": "Macaroons: cookies with contextual caveats for decentralized authorization in the cloud.",
   "keywords": [
     "authorization",
